@@ -2,6 +2,8 @@
 
 Welcome to **React FastAPI Pyodide** – a framework that runs a real FastAPI backend entirely in the browser using Pyodide, seamlessly integrated with React Router.
 
+See it live [here](https://mdahlgrengadd.github.io/react-fastapi-pyodide/).
+
 ---
 
 ## Table of Contents
