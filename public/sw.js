@@ -1,5 +1,5 @@
 // Service Worker for PyodideFastAPI Demo
-const CACHE_NAME = "pyodide-fastapi-v1";
+const CACHE_NAME = "pyodide-fastapi-v6";
 
 // Get the base path from the service worker URL
 const basePath = self.location.pathname.replace("/sw.js", "") || "";
@@ -7,14 +7,24 @@ const basePath = self.location.pathname.replace("/sw.js", "") || "";
 const STATIC_RESOURCES = [
   basePath + "/",
   basePath + "/backend/v1/main.py",
-  basePath + "/backend/bridge.py",
-  basePath + "/backend/database/connection.py",
-  basePath + "/backend/database/__init__.py",
-  basePath + "/backend/models/models.py",
-  basePath + "/backend/models/__init__.py",
-  basePath + "/backend/schemas/schemas.py",
-  basePath + "/backend/schemas/__init__.py",
-  basePath + "/backend/utils.py",
+  basePath + "/backend/app/core/bridge.py",
+  basePath + "/backend/app/core/settings.py",
+  basePath + "/backend/app/core/logging.py",
+  basePath + "/backend/app/core/security.py",
+  basePath + "/backend/app/core/runtime.py",
+  basePath + "/backend/app/core/__init__.py",
+  basePath + "/backend/app/db/base.py",
+  basePath + "/backend/app/db/session.py",
+  basePath + "/backend/app/db/init_db.py",
+  basePath + "/backend/app/db/__init__.py",
+  basePath + "/backend/app/domains/users/models.py",
+  basePath + "/backend/app/domains/users/schemas.py",
+  basePath + "/backend/app/domains/users/__init__.py",
+  basePath + "/backend/app/domains/posts/models.py",
+  basePath + "/backend/app/domains/posts/schemas.py",
+  basePath + "/backend/app/domains/posts/__init__.py",
+  basePath + "/backend/app/domains/__init__.py",
+  basePath + "/backend/app/__init__.py",
   basePath + "/backend/v1/__init__.py",
   basePath + "/backend/__init__.py",
   basePath + "/vite.svg",

@@ -1,0 +1,24 @@
+# FastAPI and core dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy==2.0.23
+aiosqlite==0.19.0  # For async SQLite support
+alembic==1.13.1
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2  # For async testing with TestClient
+
+# Development
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0
+mypy==1.7.1
+
+# Optional: Production dependencies
+gunicorn==21.2.0  # For production deployment
