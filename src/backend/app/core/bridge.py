@@ -709,9 +709,9 @@ def get_endpoints():
     """Get all registered endpoints from the FastAPI app."""
     if _app is None:
         return []
-    
+
     endpoints = []
-    
+
     # Iterate through all routes in the FastAPI app
     for route in _app.routes:
         if hasattr(route, 'methods') and hasattr(route, 'path'):
@@ -720,8 +720,9 @@ def get_endpoints():
                 if method.upper() not in ('HEAD', 'OPTIONS'):  # Skip auto-generated methods
                     endpoint_id = f"{method.upper()}_{route.path.replace('/', '_').replace('{', '').replace('}', '')}"
                     if route.path.startswith('/'):
-                        endpoint_id = endpoint_id[1:]  # Remove leading underscore
-                    
+                        # Remove leading underscore
+                        endpoint_id = endpoint_id[1:]
+
                     endpoint_info = {
                         'operationId': endpoint_id,
                         'method': method.upper(),
@@ -730,7 +731,7 @@ def get_endpoints():
                         'handler': route.endpoint.__name__ if hasattr(route.endpoint, '__name__') else 'unknown'
                     }
                     endpoints.append(endpoint_info)
-    
+
     return endpoints
 
 
@@ -738,7 +739,7 @@ def get_openapi_schema():
     """Get the OpenAPI schema from the FastAPI app."""
     if _app is None:
         return None
-    
+
     # Generate OpenAPI schema using FastAPI's built-in method
     return _app.openapi()
 
@@ -747,42 +748,43 @@ async def execute_endpoint(operation_id: str, path_params=None, query_params=Non
     """Execute a specific endpoint by operation ID."""
     if _app is None:
         raise RuntimeError("FastAPI app not initialized")
-    
+
     # Find the route by operation ID
     target_route = None
     target_method = None
-    
+
     for route in _app.routes:
         if hasattr(route, 'methods') and hasattr(route, 'path'):
             for method in route.methods:
                 if method.upper() not in ('HEAD', 'OPTIONS'):
                     endpoint_id = f"{method.upper()}_{route.path.replace('/', '_').replace('{', '').replace('}', '')}"
                     if route.path.startswith('/'):
-                        endpoint_id = endpoint_id[1:]  # Remove leading underscore
-                    
+                        # Remove leading underscore
+                        endpoint_id = endpoint_id[1:]
+
                     if endpoint_id == operation_id:
                         target_route = route
                         target_method = method.upper()
                         break
             if target_route:
                 break
-    
+
     if not target_route:
         return {
             "error": "Internal Server Error",
             "detail": f"Endpoint not found: {operation_id}",
             "status_code": 500
         }
-    
+
     try:
         # Prepare the endpoint function
         endpoint_func = target_route.endpoint
-        
+
         # Create a mock request/response context
         from starlette.requests import Request
         from starlette.responses import JSONResponse
         import io
-        
+
         # Create a mock request
         scope = {
             "type": "http",
@@ -792,26 +794,27 @@ async def execute_endpoint(operation_id: str, path_params=None, query_params=Non
             "headers": [],
             "path_params": path_params or {},
         }
-        
+
         # Mock receive and send
         async def receive():
             if body is not None:
                 import json
-                body_bytes = json.dumps(body).encode() if isinstance(body, dict) else str(body).encode()
+                body_bytes = json.dumps(body).encode() if isinstance(
+                    body, dict) else str(body).encode()
                 return {"type": "http.request", "body": body_bytes}
             return {"type": "http.request", "body": b""}
-        
+
         async def send(message):
             pass
-        
+
         # Execute the endpoint
         if inspect.iscoroutinefunction(endpoint_func):
             result = await endpoint_func()
         else:
             result = endpoint_func()
-        
+
         return result
-        
+
     except Exception as e:
         log(f"Error executing endpoint {operation_id}: {e}")
         return {

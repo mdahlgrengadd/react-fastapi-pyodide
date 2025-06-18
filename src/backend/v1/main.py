@@ -35,7 +35,7 @@ try:    # Import from the new app structure
 
 except ImportError as e:
     print(f"❌ Failed to import modular app: {e}")
-    
+
     # Set fallback values
     IS_PYODIDE = 'pyodide' in sys.modules
 
