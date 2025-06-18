@@ -15,6 +15,7 @@ export class PyodideAPIManager {
       for (const path of PYODIDE_CONFIG.API_PATHS) {
         this.pyodide.FS.mkdirTree(path);
       } // Load and write Python API files from public/backend/app
+      console.log("🔧 BASE_URL:", import.meta.env.BASE_URL);
       for (const fileName of PYODIDE_CONFIG.API_FILES) {
         try {
           // Use the correct base path for the new modular structure
@@ -23,6 +24,7 @@ export class PyodideAPIManager {
             /\/+/g,
             "/"
           );
+          console.log(`🔗 Loading: ${apiFileUrl}`);
           const response = await fetch(apiFileUrl);
           if (response.ok) {
             const content = await response.text();
@@ -83,17 +85,50 @@ if not os.getcwd().endswith("/persist/api"):
 
 # Try to import the bridge module properly
 try:
-    from app.core.bridge import EnhancedFastAPIBridge
+    from app.core.bridge import EnhancedFastAPIBridge, execute_endpoint, get_endpoints, get_openapi_schema
     # Create a global bridge instance
     bridge = EnhancedFastAPIBridge()
     print("✅ Successfully imported and created bridge from modular structure!")
+    
+    # Import the app to ensure all routes are loaded first
+    print("📱 Loading FastAPI app...")
+    from app.app_main import app
+    print("✅ FastAPI app loaded successfully!")
+    
+    # Now initialize the database after the app is ready
+    try:
+        from app.db.init_db import init_db_sync
+        print("🗄️ Initializing database...")
+        init_db_sync()
+        print("✅ Database initialized successfully!")
+    except Exception as e:
+        print(f"⚠️ Database initialization failed: {e}")
+        print(f"🔍 Error details: {type(e).__name__}: {str(e)}")
+        # Continue anyway - the error will be shown when endpoints are called
 except ImportError as e:
     print(f"❌ Failed to import modular bridge: {e}")
     # Fall back to executing the file directly
     exec(open("/persist/api/app/core/bridge.py").read())
     # Create bridge instance after exec
+    from app.core.bridge import EnhancedFastAPIBridge, execute_endpoint, get_endpoints, get_openapi_schema
     bridge = EnhancedFastAPIBridge()
     print("✅ Bridge loaded via exec fallback")
+    
+    # Import the app to ensure all routes are loaded first
+    print("📱 Loading FastAPI app...")
+    from app.app_main import app
+    print("✅ FastAPI app loaded successfully!")
+    
+    # Now initialize the database after the app is ready
+    try:
+        from app.db.init_db import init_db_sync
+        print("🗄️ Initializing database...")
+        init_db_sync()
+        print("✅ Database initialized successfully!")
+    except Exception as e:
+        print(f"⚠️ Database initialization failed: {e}")
+        print(f"🔍 Error details: {type(e).__name__}: {str(e)}")
+        # Continue anyway - the error will be shown when endpoints are called
       `);
       console.log(" Enhanced FastAPI bridge loaded from modular structure!");
     } catch (error) {

@@ -4,9 +4,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from main import create_app
-from db.base import Base
-from core.deps import get_db
+from app.app_main import create_app
+from app.db.base import Base
+from app.core.deps import get_db
 
 
 @pytest.fixture

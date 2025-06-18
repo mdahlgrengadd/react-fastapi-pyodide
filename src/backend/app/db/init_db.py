@@ -4,10 +4,10 @@ from typing import Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from .base import Base
-from .session import engine, get_db_sync, DATABASE_URL, ENVIRONMENT, HAS_ASYNC_SQLALCHEMY
-from core.logging import get_logger
-from core.runtime import IS_PYODIDE
+from app.db.base import Base
+from app.db.session import engine, get_db_sync, DATABASE_URL, ENVIRONMENT, HAS_ASYNC_SQLALCHEMY
+from app.core.logging import get_logger
+from app.core.runtime import IS_PYODIDE
 
 logger = get_logger(__name__)
 
@@ -16,8 +16,10 @@ async def create_tables():
     """Create all database tables."""
     try:
         # Import all models to ensure they're registered
-        from domains.users.models import User
-        from domains.posts.models import Post
+        from app.domains.models import User, Post, configure_relationships
+
+        # Explicitly configure mappers to resolve relationships
+        configure_relationships()
 
         if HAS_ASYNC_SQLALCHEMY and not IS_PYODIDE:
             # Async engine - use async context manager
@@ -35,9 +37,12 @@ async def create_tables():
 
 def create_tables_sync():
     """Synchronous version of create_tables for compatibility."""
-    try:        # Import all models to ensure they're registered
-        from domains.users.models import User
-        from domains.posts.models import Post
+    try:
+        # Import all models to ensure they're registered
+        from app.domains.models import User, Post, configure_relationships
+
+        # Explicitly configure mappers to resolve relationships
+        configure_relationships()
 
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully (sync)")
@@ -48,9 +53,9 @@ def create_tables_sync():
 
 def init_sample_data(db: Session) -> Dict[str, Any]:
     """Initialize database with sample data (only if not already persisted)."""
-    try:        # Import models
-        from domains.users.models import User
-        from domains.posts.models import Post
+    try:
+        # Import models
+        from app.domains.models import User, Post
 
         # Check if data already exists (from persistence)
         existing_users = db.query(User).count()

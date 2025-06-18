@@ -1,4 +1,5 @@
 """Post domain schemas."""
+from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
 
@@ -25,8 +26,8 @@ class PostResponse(BaseModel):
     content: str
     published: bool
     author_id: int
-    created_at: Optional[str]
-    updated_at: Optional[str]
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
 
     class Config:
         from_attributes = True

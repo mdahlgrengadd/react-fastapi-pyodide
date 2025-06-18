@@ -50,6 +50,7 @@ export const PYODIDE_CONFIG = {
     "/app/domains/system/router.py",
     "/app/domains/system/__init__.py",
     "/app/domains/__init__.py",
+    "/app/domains/models.py",
     "/v1/main.py",
   ],
   MUTATING_METHODS: ["POST", "PUT", "PATCH", "DELETE"],

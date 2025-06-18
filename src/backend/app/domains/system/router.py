@@ -2,9 +2,9 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends
 
-from core.deps import get_current_user
-from core.runtime import get_environment_info
-from db.session import DATABASE_URL, ENVIRONMENT
+from app.core.deps import get_current_user
+from app.core.runtime import get_environment_info
+from app.db.session import DATABASE_URL, ENVIRONMENT
 
 router = APIRouter()
 

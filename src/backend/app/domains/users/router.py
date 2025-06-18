@@ -1,12 +1,13 @@
 """User domain router."""
-from typing import List
+from typing import List, Union
 from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.deps import get_db, get_current_user
-from .models import User
-from .schemas import UserCreate, UserUpdate, UserResponse
-from .service import UserService
+from app.core.deps import get_db, get_current_user
+from app.domains.models import User
+from app.domains.users.schemas import UserCreate, UserUpdate, UserResponse
+from app.domains.users.service import UserService
 
 router = APIRouter()
 
@@ -15,35 +16,35 @@ router = APIRouter()
             summary="Get all users",
             description="Returns list of users with pagination",
             tags=["users"])
-def get_users(
+async def get_users(
     skip: int = Query(0, ge=0, description="Number of users to skip"),
     limit: int = Query(100, ge=1, le=100,
                        description="Maximum number of users to return"),
     search: str = Query(None, description="Search users by name or email"),
-    db: Session = Depends(get_db),
+    db: Union[Session, AsyncSession] = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ) -> List[UserResponse]:
     """Get all users with optional search and pagination."""
     service = UserService(db)
 
     if search:
-        return service.search_users(search)
+        return await service.search_users(search)
     else:
-        return service.get_users(skip=skip, limit=limit)
+        return await service.get_users(skip=skip, limit=limit)
 
 
 @router.get("/users/{user_id}",
             summary="Get user by ID",
             description="Returns a single user by ID",
             tags=["users"])
-def get_user(
+async def get_user(
     user_id: int,
-    db: Session = Depends(get_db),
+    db: Union[Session, AsyncSession] = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ) -> UserResponse:
     """Get a specific user by ID."""
     service = UserService(db)
-    db_user = service.get_user(user_id)
+    db_user = await service.get_user(user_id)
 
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -55,35 +56,35 @@ def get_user(
              description="Creates and returns new user",
              tags=["users"],
              status_code=201)
-def create_user(
+async def create_user(
     user: UserCreate,
-    db: Session = Depends(get_db),
+    db: Union[Session, AsyncSession] = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ) -> UserResponse:
     """Create a new user."""
     service = UserService(db)
 
     # Check if user with email already exists
-    existing_user = service.get_user_by_email(user.email)
+    existing_user = await service.get_user_by_email(user.email)
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    return service.create_user(user)
+    return await service.create_user(user)
 
 
 @router.put("/users/{user_id}",
             summary="Update user",
             description="Updates and returns user",
             tags=["users"])
-def update_user(
+async def update_user(
     user_id: int,
     user: UserUpdate,
-    db: Session = Depends(get_db),
+    db: Union[Session, AsyncSession] = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ) -> UserResponse:
     """Update an existing user."""
     service = UserService(db)
-    db_user = service.update_user(user_id, user)
+    db_user = await service.update_user(user_id, user)
 
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -94,14 +95,14 @@ def update_user(
                summary="Delete user",
                description="Deletes a user",
                tags=["users"])
-def delete_user(
+async def delete_user(
     user_id: int,
-    db: Session = Depends(get_db),
+    db: Union[Session, AsyncSession] = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Delete a user."""
     service = UserService(db)
-    success = service.delete_user(user_id)
+    success = await service.delete_user(user_id)
 
     if not success:
         raise HTTPException(status_code=404, detail="User not found")

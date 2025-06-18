@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
 from sqlalchemy.orm import relationship
 
-from db.base import Base
+from app.db.base import Base
 
 
 class User(Base):
@@ -18,6 +18,6 @@ class User(Base):
     bio = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # Relationship to posts
+    # Relationship to posts - use string reference for late binding
     posts = relationship("Post", back_populates="author",
                          cascade="all, delete-orphan")

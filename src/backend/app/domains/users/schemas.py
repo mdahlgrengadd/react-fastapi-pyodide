@@ -1,4 +1,5 @@
 """User domain schemas."""
+from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
 
@@ -28,7 +29,7 @@ class UserResponse(BaseModel):
     age: Optional[int]
     is_active: bool
     bio: Optional[str]
-    created_at: Optional[str]
+    created_at: Optional[datetime]
 
     class Config:
         from_attributes = True

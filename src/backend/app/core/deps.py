@@ -2,8 +2,8 @@
 from typing import AsyncGenerator, Generator, Union
 from fastapi import Depends
 
-from db.session import get_db as get_db_session, HAS_ASYNC_SQLALCHEMY, IS_PYODIDE
-from core.security import get_current_user as get_current_user_impl, get_current_user_sync
+from app.db.session import get_db as get_db_session, HAS_ASYNC_SQLALCHEMY, IS_PYODIDE
+from app.core.security import get_current_user as get_current_user_impl, get_current_user_sync
 
 # Database dependency
 if HAS_ASYNC_SQLALCHEMY and not IS_PYODIDE:

@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 
-from db.base import Base
+from app.db.base import Base
 
 
 class Post(Base):
@@ -19,5 +19,5 @@ class Post(Base):
     updated_at = Column(DateTime, default=datetime.utcnow,
                         onupdate=datetime.utcnow)
 
-    # Relationship to user
+    # Relationship to user - use string reference for late binding
     author = relationship("User", back_populates="posts")

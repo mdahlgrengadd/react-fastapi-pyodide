@@ -455,13 +455,38 @@ def _register_endpoint(path: str, method: str, func: Callable[..., Any], decorat
 
 def get_endpoints() -> List[Dict[str, Any]]:
     """Return list of registered endpoints."""
-    # Convert handler callables to names for serialization
+    # First try to get from registry (for endpoints registered through our decorators)
     result = []
     for endpoint in _endpoints_registry.values():
         endpoint_copy = endpoint.copy()
         if callable(endpoint_copy["handler"]):
             endpoint_copy["handler"] = endpoint_copy["handler"].__name__
         result.append(endpoint_copy)
+
+    # If registry is empty, read directly from FastAPI app routes
+    if not result and _app is not None and hasattr(_app, 'routes'):
+        for route in _app.routes:
+            if hasattr(route, 'methods') and hasattr(route, 'path'):
+                # This is a regular route (not WebSocket, etc.)
+                for method in route.methods:
+                    if method.upper() not in ('HEAD', 'OPTIONS'):  # Skip auto-generated methods
+                        # Generate operation ID properly
+                        path_normalized = route.path.replace(
+                            '/', '_').replace('{', '').replace('}', '')
+                        if path_normalized.startswith('_'):
+                            # Remove leading underscore only
+                            path_normalized = path_normalized[1:]
+                        endpoint_id = f"{method.upper()}__{path_normalized}"
+
+                        endpoint_info = {
+                            'operationId': endpoint_id,
+                            'method': method.upper(),
+                            'path': route.path,
+                            'summary': getattr(route.endpoint, '__doc__', '') or f"{method.upper()} {route.path}",
+                            'handler': route.endpoint.__name__ if hasattr(route.endpoint, '__name__') else 'unknown'
+                        }
+                        result.append(endpoint_info)
+
     return result
 
 
@@ -504,17 +529,49 @@ async def execute_endpoint(
             try:
                 body = body.to_py()
             except Exception:
-                pass
+                pass    # Find handler - first check registry, then check FastAPI routes
+    handler = None
 
-    # Find handler
-    if operation_id not in _endpoints_registry:
+    if operation_id in _endpoints_registry:
+        handler = _endpoints_registry[operation_id]["handler"]
+    elif _app is not None and hasattr(_app, 'routes'):
+        # Look for the endpoint in FastAPI routes
+        for route in _app.routes:
+            if hasattr(route, 'methods') and hasattr(route, 'path'):
+                for method in route.methods:
+                    if method.upper() not in ('HEAD', 'OPTIONS'):
+                        # Generate operation ID the same way as in get_endpoints
+                        path_normalized = route.path.replace(
+                            '/', '_').replace('{', '').replace('}', '')
+                        if path_normalized.startswith('_'):
+                            path_normalized = path_normalized[1:]
+                        endpoint_id = f"{method.upper()}__{path_normalized}"
+
+                        if endpoint_id == operation_id:
+                            handler = route.endpoint
+                            break
+                if handler:
+                    break
+
+    if not handler:
+        available_endpoints = list(_endpoints_registry.keys())
+        # Also add endpoints from FastAPI routes if registry is empty
+        if not available_endpoints and _app is not None and hasattr(_app, 'routes'):
+            for route in _app.routes:
+                if hasattr(route, 'methods') and hasattr(route, 'path'):
+                    for method in route.methods:
+                        if method.upper() not in ('HEAD', 'OPTIONS'):
+                            path_normalized = route.path.replace(
+                                '/', '_').replace('{', '').replace('}', '')
+                            if path_normalized.startswith('_'):
+                                path_normalized = path_normalized[1:]
+                            endpoint_id = f"{method.upper()}__{path_normalized}"
+                            available_endpoints.append(endpoint_id)
+
         error_response = {"detail": f"Handler for {operation_id} not found"}
         if DEBUG_LEVEL >= 1:
-            error_response["available_endpoints"] = list(
-                _endpoints_registry.keys())
+            error_response["available_endpoints"] = available_endpoints
         return {"content": error_response, "status_code": 404}
-
-    handler = _endpoints_registry[operation_id]["handler"]
 
     if not callable(handler):
         return {
@@ -703,125 +760,6 @@ sys.modules["uvicorn"] = _UvicornStub("uvicorn")
 
 # Global endpoint registry
 _endpoints_registry = {}
-
-
-def get_endpoints():
-    """Get all registered endpoints from the FastAPI app."""
-    if _app is None:
-        return []
-
-    endpoints = []
-
-    # Iterate through all routes in the FastAPI app
-    for route in _app.routes:
-        if hasattr(route, 'methods') and hasattr(route, 'path'):
-            # This is a regular route (not WebSocket, etc.)
-            for method in route.methods:
-                if method.upper() not in ('HEAD', 'OPTIONS'):  # Skip auto-generated methods
-                    endpoint_id = f"{method.upper()}_{route.path.replace('/', '_').replace('{', '').replace('}', '')}"
-                    if route.path.startswith('/'):
-                        # Remove leading underscore
-                        endpoint_id = endpoint_id[1:]
-
-                    endpoint_info = {
-                        'operationId': endpoint_id,
-                        'method': method.upper(),
-                        'path': route.path,
-                        'summary': getattr(route.endpoint, '__doc__', '') or f"{method.upper()} {route.path}",
-                        'handler': route.endpoint.__name__ if hasattr(route.endpoint, '__name__') else 'unknown'
-                    }
-                    endpoints.append(endpoint_info)
-
-    return endpoints
-
-
-def get_openapi_schema():
-    """Get the OpenAPI schema from the FastAPI app."""
-    if _app is None:
-        return None
-
-    # Generate OpenAPI schema using FastAPI's built-in method
-    return _app.openapi()
-
-
-async def execute_endpoint(operation_id: str, path_params=None, query_params=None, body=None):
-    """Execute a specific endpoint by operation ID."""
-    if _app is None:
-        raise RuntimeError("FastAPI app not initialized")
-
-    # Find the route by operation ID
-    target_route = None
-    target_method = None
-
-    for route in _app.routes:
-        if hasattr(route, 'methods') and hasattr(route, 'path'):
-            for method in route.methods:
-                if method.upper() not in ('HEAD', 'OPTIONS'):
-                    endpoint_id = f"{method.upper()}_{route.path.replace('/', '_').replace('{', '').replace('}', '')}"
-                    if route.path.startswith('/'):
-                        # Remove leading underscore
-                        endpoint_id = endpoint_id[1:]
-
-                    if endpoint_id == operation_id:
-                        target_route = route
-                        target_method = method.upper()
-                        break
-            if target_route:
-                break
-
-    if not target_route:
-        return {
-            "error": "Internal Server Error",
-            "detail": f"Endpoint not found: {operation_id}",
-            "status_code": 500
-        }
-
-    try:
-        # Prepare the endpoint function
-        endpoint_func = target_route.endpoint
-
-        # Create a mock request/response context
-        from starlette.requests import Request
-        from starlette.responses import JSONResponse
-        import io
-
-        # Create a mock request
-        scope = {
-            "type": "http",
-            "method": target_method,
-            "path": target_route.path,
-            "query_string": b"",
-            "headers": [],
-            "path_params": path_params or {},
-        }
-
-        # Mock receive and send
-        async def receive():
-            if body is not None:
-                import json
-                body_bytes = json.dumps(body).encode() if isinstance(
-                    body, dict) else str(body).encode()
-                return {"type": "http.request", "body": body_bytes}
-            return {"type": "http.request", "body": b""}
-
-        async def send(message):
-            pass
-
-        # Execute the endpoint
-        if inspect.iscoroutinefunction(endpoint_func):
-            result = await endpoint_func()
-        else:
-            result = endpoint_func()
-
-        return result
-
-    except Exception as e:
-        log(f"Error executing endpoint {operation_id}: {e}")
-        return {
-            "error": type(e).__name__,
-            "detail": str(e),
-            "status_code": 500
-        }
 
 
 # ---------------------------------------------------------------------------

@@ -1,9 +1,21 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { QueryClient, QueryClientProvider } from 'react-query';
-import { createBrowserRouter, RouteObject } from 'react-router-dom';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { QueryClient, QueryClientProvider } from "react-query";
+import { createBrowserRouter, RouteObject } from "react-router-dom";
 
-import { EndpointList, PyodideEndpoint, pyodideEngine, SmartEndpoint } from './index';
-import { PyodideSwaggerUI } from './PyodideSwaggerUI';
+import {
+  EndpointList,
+  PyodideEndpoint,
+  pyodideEngine,
+  SmartEndpoint,
+} from "./index";
+import { PyodideSwaggerUI } from "./PyodideSwaggerUI";
 
 interface PyodideContextType {
   isInitialized: boolean;
@@ -115,11 +127,22 @@ export const PyodideProvider: React.FC<PyodideProviderProps> = ({
         ),
       };
 
-      // Add Swagger UI docs route
+      // Add Swagger UI docs route with error handling
       const docsRoute: RouteObject = {
         path: "/docs",
         element: (
-          <React.Suspense fallback={<div>Loading API documentation...</div>}>
+          <React.Suspense
+            fallback={
+              <div style={{ padding: "20px", textAlign: "center" }}>
+                <div>Loading API documentation...</div>
+                <div
+                  style={{ fontSize: "12px", color: "#666", marginTop: "10px" }}
+                >
+                  If this takes too long, try using preview mode instead
+                </div>
+              </div>
+            }
+          >
             <PyodideSwaggerUI onError={handleError} />
           </React.Suspense>
         ),

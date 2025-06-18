@@ -12,11 +12,14 @@ if __name__ != "__main__":
     if current_dir not in sys.path:
         sys.path.insert(0, current_dir)
 
-from core.settings import settings
-from core.logging import setup_logging, get_logger
-from core.runtime import IS_PYODIDE
-from db.init_db import init_db, init_db_sync
-from api import v1_router
+# Import models EARLY to ensure they're available for relationship resolution
+from app.domains.models import User, Post, configure_relationships
+
+from app.core.settings import settings
+from app.core.logging import setup_logging, get_logger
+from app.core.runtime import IS_PYODIDE
+from app.db.init_db import init_db, init_db_sync
+from app.api import v1_router
 
 logger = get_logger(__name__)
 
@@ -27,6 +30,9 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting up application...")
     setup_logging(settings.debug)
+
+    # Ensure models are properly configured before database initialization
+    configure_relationships()
 
     try:
         if IS_PYODIDE:

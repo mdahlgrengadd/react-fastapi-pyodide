@@ -8,9 +8,9 @@ from sqlalchemy import pool
 from alembic import context
 
 # Import your models here for autogenerate to work
-from db.base import Base
-from domains.users.models import User
-from domains.posts.models import Post
+from app.db.base import Base
+from app.domains.users.models import User
+from app.domains.posts.models import Post
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

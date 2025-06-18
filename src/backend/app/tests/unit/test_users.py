@@ -4,10 +4,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 
-from db.base import Base
-from domains.users.models import User
-from domains.users.service import UserService
-from domains.users.schemas import UserCreate, UserUpdate
+from app.db.base import Base
+from app.domains.users.models import User
+from app.domains.users.service import UserService
+from app.domains.users.schemas import UserCreate, UserUpdate
 
 
 @pytest.fixture

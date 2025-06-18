@@ -17,8 +17,8 @@ except ImportError:
     from sqlalchemy.orm import sessionmaker, Session as SyncSession
     HAS_ASYNC_SQLALCHEMY = False
 
-from core.runtime import IS_PYODIDE, get_environment
-from core.logging import get_logger
+from app.core.runtime import IS_PYODIDE, get_environment
+from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 

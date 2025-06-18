@@ -25,7 +25,7 @@ sys.path.insert(0, app_dir)
 try:    # Import from the new app structure
     from app.app_main import app
     from app.core.runtime import IS_PYODIDE
-    from core.logging import get_logger
+    from app.core.logging import get_logger
 
     logger = get_logger(__name__)
     logger.info("✅ Successfully loaded modular FastAPI app")
