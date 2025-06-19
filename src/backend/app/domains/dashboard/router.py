@@ -16,7 +16,8 @@ router = APIRouter()
 @router.get("/dashboard",
             summary="Dashboard with mixed SQLAlchemy models",
             description="Complex response combining multiple SQLAlchemy models",
-            tags=["dashboard"])
+            tags=["dashboard"],
+            operation_id="get_dashboard")
 async def get_dashboard(
     db: Union[Session, AsyncSession] = Depends(get_db),
     current_user: dict = Depends(get_current_user)
@@ -90,7 +91,8 @@ async def get_dashboard(
 @router.get("/analytics",
             summary="Analytics with aggregated data",
             description="Complex analytics combining SQLAlchemy queries and models",
-            tags=["dashboard"])
+            tags=["dashboard"],
+            operation_id="get_analytics")
 async def get_analytics(
     db: Union[Session, AsyncSession] = Depends(get_db),
     current_user: dict = Depends(get_current_user)

@@ -11,7 +11,8 @@ router = APIRouter()
 
 @router.get("/",
             summary="Welcome to Enhanced Bridge Demo",
-            tags=["system"])
+            tags=["system"],
+            operation_id="read_root")
 def read_root(current_user: dict = Depends(get_current_user)):
     """Welcome endpoint showcasing dependency injection and persistence info."""
 
@@ -51,7 +52,8 @@ def read_root(current_user: dict = Depends(get_current_user)):
 @router.get("/system/info",
             summary="System information",
             description="Get system and runtime information",
-            tags=["system"])
+            tags=["system"],
+            operation_id="get_system_info")
 def get_system_info(current_user: dict = Depends(get_current_user)):
     """Get comprehensive system information."""
     env_info = get_environment_info()
@@ -71,7 +73,8 @@ def get_system_info(current_user: dict = Depends(get_current_user)):
 @router.get("/persistence/status",
             summary="Detailed persistence information",
             description="Get comprehensive information about data persistence",
-            tags=["system"])
+            tags=["system"],
+            operation_id="get_persistence_status")
 def get_persistence_status(current_user: dict = Depends(get_current_user)):
     """Get detailed persistence status information."""
     is_persistent = "persist" in DATABASE_URL

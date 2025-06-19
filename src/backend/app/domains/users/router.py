@@ -15,7 +15,8 @@ router = APIRouter()
 @router.get("/users",
             summary="Get all users",
             description="Returns list of users with pagination",
-            tags=["users"])
+            tags=["users"],
+            operation_id="get_users")
 async def get_users(
     skip: int = Query(0, ge=0, description="Number of users to skip"),
     limit: int = Query(100, ge=1, le=100,
@@ -36,7 +37,8 @@ async def get_users(
 @router.get("/users/{user_id}",
             summary="Get user by ID",
             description="Returns a single user by ID",
-            tags=["users"])
+            tags=["users"],
+            operation_id="get_user")
 async def get_user(
     user_id: int,
     db: Union[Session, AsyncSession] = Depends(get_db),
@@ -55,7 +57,8 @@ async def get_user(
              summary="Create new user",
              description="Creates and returns new user",
              tags=["users"],
-             status_code=201)
+             status_code=201,
+             operation_id="create_user")
 async def create_user(
     user: UserCreate,
     db: Union[Session, AsyncSession] = Depends(get_db),
@@ -75,7 +78,8 @@ async def create_user(
 @router.put("/users/{user_id}",
             summary="Update user",
             description="Updates and returns user",
-            tags=["users"])
+            tags=["users"],
+            operation_id="update_user")
 async def update_user(
     user_id: int,
     user: UserUpdate,
@@ -94,7 +98,8 @@ async def update_user(
 @router.delete("/users/{user_id}",
                summary="Delete user",
                description="Deletes a user",
-               tags=["users"])
+               tags=["users"],
+               operation_id="delete_user")
 async def delete_user(
     user_id: int,
     db: Union[Session, AsyncSession] = Depends(get_db),
