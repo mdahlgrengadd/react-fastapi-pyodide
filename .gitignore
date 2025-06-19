@@ -137,3 +137,6 @@ dist
 
 /public/backend
 
+# Ignore Python cache files
+__pycache__/
+*.pyc
