@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+src/pyodide_bridge/__init__.py
+src/pyodide_bridge/fastapi_bridge.py
+src/pyodide_bridge/utils.py
+src/pyodide_bridge_py.egg-info/PKG-INFO
+src/pyodide_bridge_py.egg-info/SOURCES.txt
+src/pyodide_bridge_py.egg-info/dependency_links.txt
+src/pyodide_bridge_py.egg-info/requires.txt
+src/pyodide_bridge_py.egg-info/top_level.txt
