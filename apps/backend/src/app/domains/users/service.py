@@ -85,17 +85,25 @@ class UserService:
 
     async def search_users(self, search: str) -> List[User]:
         """Search users by name or email."""
+        # Ensure search is a string and not None
+        if not search or not isinstance(search, str):
+            return []
+        
+        search_term = search.strip().lower()
+        if not search_term:
+            return []
+            
         if isinstance(self.db, AsyncSession):
             stmt = select(User).where(
-                func.lower(User.name).contains(search.lower()) |
-                func.lower(User.email).contains(search.lower())
+                func.lower(User.name).contains(search_term) |
+                func.lower(User.email).contains(search_term)
             )
             result = await self.db.execute(stmt)
             return list(result.scalars().all())
         else:
             return self.db.query(User).filter(
-                func.lower(User.name).contains(search.lower()) |
-                func.lower(User.email).contains(search.lower())
+                func.lower(User.name).contains(search_term) |
+                func.lower(User.email).contains(search_term)
             ).all()
 
     async def get_user_count(self) -> int:

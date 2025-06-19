@@ -226,14 +226,12 @@ asyncio.ensure_future(install_packages())
   }
 
   private async _setupBridge(): Promise<void> {
-    if (!this.pyodide) return;
-
-    // Load the Python bridge code
+    if (!this.pyodide) return; // Load the Python bridge code
     this.pyodide.runPython(`
 # Import bridge functionality
 try:
-    # This would import our Python package
-    from pyodide_bridge import FastAPIBridge
+    # Import the enhanced FastAPI class with bridge functionality
+    from pyodide_bridge import FastAPI
     
     # Create a global bridge instance
     _bridge_instance = None
@@ -318,7 +316,6 @@ except ImportError as e:
       throw loadError;
     }
   }
-
   private async _loadFromDirectory(basePath: string): Promise<void> {
     // This would load Python files from a directory structure
     // For now, we'll simulate loading the main FastAPI app
@@ -333,11 +330,8 @@ if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 
 try:
-    # Import the main application
-    from app_main import create_app
-    
-    # Create the app instance
-    app = create_app()
+    # Import the main application directly (no create_app function)
+    from app.app_main import app
     
     # Set as the bridge instance
     set_bridge(app)
@@ -507,7 +501,6 @@ call_endpoint()
       yield errorChunk;
     }
   }
-
   private _extractParams(operationId: string, params: CallParams) {
     // Find the endpoint to understand parameter structure
     const endpoint = this.endpoints.find(
@@ -520,16 +513,28 @@ call_endpoint()
     const queryParams: Record<string, unknown> = {};
     let body: unknown = null;
 
-    // Extract common path parameters
-    Object.entries(params).forEach(([key, value]) => {
-      if (key.endsWith("_id") || key === "id") {
-        pathParams[key] = value;
-      } else if (typeof value === "object" && value !== null) {
-        body = value;
-      } else {
-        queryParams[key] = value;
+    // Special handling for invoke_bridge_endpoint
+    if (operationId === "invoke_bridge_endpoint") {
+      // For this endpoint, we need to extract the operation_id from the parameters
+      // and pass other parameters as the body
+      const { operation_id, ...restParams } = params as any;
+      if (operation_id) {
+        pathParams.operation_id = operation_id;
+        // Pass the rest as body for the invoked endpoint
+        body = restParams;
       }
-    });
+    } else {
+      // Extract common path parameters
+      Object.entries(params).forEach(([key, value]) => {
+        if (key.endsWith("_id") || key === "id" || key === "operation_id") {
+          pathParams[key] = value;
+        } else if (typeof value === "object" && value !== null) {
+          body = value;
+        } else {
+          queryParams[key] = value;
+        }
+      });
+    }
 
     return { pathParams, queryParams, body };
   }

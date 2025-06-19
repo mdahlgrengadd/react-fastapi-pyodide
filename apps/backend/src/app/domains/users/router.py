@@ -1,5 +1,5 @@
 """User domain router."""
-from typing import List, Union
+from typing import List, Union, Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,15 +21,20 @@ async def get_users(
     skip: int = Query(0, ge=0, description="Number of users to skip"),
     limit: int = Query(100, ge=1, le=100,
                        description="Maximum number of users to return"),
-    search: str = Query(None, description="Search users by name or email"),
+    search: Optional[str] = Query(None, description="Search users by name or email"),
     db: Union[Session, AsyncSession] = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ) -> List[UserResponse]:
     """Get all users with optional search and pagination."""
     service = UserService(db)
 
-    if search:
-        return await service.search_users(search)
+    # Handle search parameter - ensure it's a string or None
+    search_term = None
+    if search is not None and isinstance(search, str):
+        search_term = search.strip() if search.strip() else None
+    
+    if search_term:
+        return await service.search_users(search_term)
     else:
         return await service.get_users(skip=skip, limit=limit)
 

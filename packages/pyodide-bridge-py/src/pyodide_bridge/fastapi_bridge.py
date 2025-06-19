@@ -3,6 +3,10 @@ FastAPI Bridge for Pyodide environments.
 
 This module provides a clean inheritance-based approach to extending FastAPI
 for use in Pyodide environments, avoiding monkey-patching.
+
+The FastAPI class in this module is a drop-in replacement for the original
+FastAPI that adds Pyodide bridge functionality. The original FastAPI class
+is available as OriginalFastAPI.
 """
 
 import asyncio
@@ -13,12 +17,12 @@ from datetime import datetime
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
 try:
-    from fastapi import FastAPI, HTTPException
+    from fastapi import FastAPI as OriginalFastAPI, HTTPException
     from fastapi.routing import APIRoute
     HAS_FASTAPI = True
 except ImportError:
     # Graceful fallback for environments without FastAPI
-    FastAPI = object  # type: ignore
+    OriginalFastAPI = object  # type: ignore
     HTTPException = Exception  # type: ignore
     APIRoute = object  # type: ignore
     HAS_FASTAPI = False
@@ -31,12 +35,12 @@ logger = logging.getLogger(__name__)
 _global_route_registry: Dict[str, Dict[str, Any]] = {}
 
 
-class FastAPIBridge(FastAPI if HAS_FASTAPI else object):
+class FastAPI(OriginalFastAPI if HAS_FASTAPI else object):
     """
     FastAPI extension that provides clean Pyodide integration.
 
-    Instead of monkey-patching FastAPI, this class extends it and overrides
-    route decorators to capture route information for bridge execution.
+    This is a drop-in replacement for the original FastAPI that extends it
+    and overrides route decorators to capture route information for bridge execution.    The original FastAPI class is available as OriginalFastAPI if needed.
     """
 
     def __init__(self, *args, **kwargs):
@@ -50,7 +54,7 @@ class FastAPIBridge(FastAPI if HAS_FASTAPI else object):
         """Initialize bridge-specific functionality."""
         # Override route decorators to capture route information
         self._patch_route_methods()
-        logger.info("FastAPIBridge initialized")
+        logger.info("FastAPI (with Pyodide bridge) initialized")
 
     def _patch_route_methods(self) -> None:
         """Override HTTP method decorators to capture route information."""
@@ -58,6 +62,9 @@ class FastAPIBridge(FastAPI if HAS_FASTAPI else object):
             original_method = getattr(super(), method)
             setattr(self, method, self._make_route_wrapper(
                 original_method, method.upper()))
+
+        # Also override include_router to capture routes from sub-routers
+        self._original_include_router = super().include_router
 
     def _make_route_wrapper(self, original_method: Callable, http_method: str):
         """Create a wrapper for route methods that captures route information."""
@@ -84,6 +91,56 @@ class FastAPIBridge(FastAPI if HAS_FASTAPI else object):
                 return original_method(path, **kwargs)(func)
             return inner
         return route_decorator
+
+    def _include_router_wrapper(self, router, **kwargs):
+        """Wrapper for include_router that captures routes from the included router."""
+        # First include the router normally
+        result = self._original_include_router(router, **kwargs)
+
+        # Then extract and register routes from the included router
+        self._extract_routes_from_router(router, **kwargs)
+
+        return result
+
+    def include_router(self, router, **kwargs):
+        """Override include_router to capture routes from included routers."""
+        return self._include_router_wrapper(router, **kwargs)
+
+    def _extract_routes_from_router(self, router, prefix: str = "", **kwargs):
+        """Extract and register routes from an APIRouter."""
+        try:
+            from fastapi.routing import APIRoute
+
+            # Get the prefix for this router inclusion
+            router_prefix = kwargs.get("prefix", prefix or "")
+
+            # Iterate through routes in the router
+            for route in router.routes:
+                if isinstance(route, APIRoute):
+                    # Extract route information
+                    for method in route.methods:
+                        if method.lower() in ("get", "post", "put", "patch", "delete", "options", "head"):
+                            # Get operation_id from the route
+                            operation_id = getattr(route, 'operation_id', None)
+
+                            if operation_id:
+                                # Construct full path
+                                full_path = router_prefix + route.path
+
+                                # Register the route
+                                self._register_route(
+                                    operation_id=operation_id,
+                                    path=full_path,
+                                    method=method.upper(),
+                                    handler=route.endpoint,
+                                    kwargs={}
+                                )
+
+                                logger.debug(
+                                    f"Captured route from router: {operation_id} -> {method.upper()} {full_path}")
+
+        except Exception as e:
+            logger.warning(f"Error extracting routes from router: {e}")
 
     def _register_route(
         self,
@@ -231,10 +288,14 @@ class FastAPIBridge(FastAPI if HAS_FASTAPI else object):
                     else:
                         kwargs[name] = body
                 except Exception:
-                    kwargs[name] = body
-            # Use default value if available
+                    kwargs[name] = body            # Use default value if available
             elif param.default != inspect.Parameter.empty:
-                kwargs[name] = param.default
+                # Handle FastAPI Query parameters specially
+                if hasattr(param.default, 'default'):
+                    # It's a FastAPI Query, Path, Body, etc. - use its default value
+                    kwargs[name] = param.default.default
+                else:
+                    kwargs[name] = param.default
 
         return kwargs
 
@@ -346,16 +407,24 @@ class FastAPIBridge(FastAPI if HAS_FASTAPI else object):
     def get_endpoints(self) -> List[Dict[str, Any]]:
         """Get list of registered endpoints for frontend consumption."""
         endpoints = []
+        # Filter out bridge meta-endpoints that shouldn't be directly callable from UI
+        excluded_operations = {
+            "get_bridge_endpoints",
+            "get_bridge_registry",
+            "invoke_bridge_endpoint"
+        }
+
         for operation_id, route_info in _global_route_registry.items():
-            endpoints.append({
-                "operationId": operation_id,
-                "path": route_info["path"],
-                "method": route_info["method"],
-                "summary": route_info["summary"],
-                "tags": route_info["tags"],
-                "responseModel": route_info.get("response_model"),
-                "requestModel": route_info.get("request_model"),
-            })
+            if operation_id not in excluded_operations:
+                endpoints.append({
+                    "operationId": operation_id,
+                    "path": route_info["path"],
+                    "method": route_info["method"],
+                    "summary": route_info["summary"],
+                    "tags": route_info["tags"],
+                    "responseModel": route_info.get("response_model"),
+                    "requestModel": route_info.get("request_model"),
+                })
         return endpoints
 
     def get_openapi_schema(self) -> Dict[str, Any]:
@@ -375,6 +444,9 @@ class FastAPIBridge(FastAPI if HAS_FASTAPI else object):
                 "info": {
                     "title": getattr(self, 'title', 'FastAPI'),
                     "version": getattr(self, 'version', '0.1.0')
-                },
-                "paths": {}
+                },                "paths": {}
             }
+
+
+# Backwards compatibility alias
+FastAPIBridge = FastAPI

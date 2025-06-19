@@ -168,7 +168,7 @@ async def async_demo(current_user: dict = Depends(get_current_user)):
     }
 
 
-@router.get("/health-async")
+@router.get("/health-async", operation_id="health_check_async")
 async def health_check_async(current_user: dict = Depends(get_current_user)):
     """Async health check endpoint demonstrating async operations."""
     start_time = datetime.now()
@@ -191,7 +191,7 @@ async def health_check_async(current_user: dict = Depends(get_current_user)):
     }
 
 
-@router.get("/async-simulation")
+@router.get("/async-simulation", operation_id="async_simulation")
 async def async_simulation(
     steps: int = Query(default=5, ge=1, le=20,
                        description="Number of simulation steps"),
@@ -243,7 +243,7 @@ async def async_simulation(
     }
 
 
-@router.get("/async-data-stream")
+@router.get("/async-data-stream", operation_id="async_data_stream")
 async def async_data_stream(
     batch_size: int = Query(default=3, ge=1, le=10,
                             description="Number of items per batch"),
@@ -343,7 +343,7 @@ async def async_data_stream(
     }
 
 
-@router.get("/async-workflow")
+@router.get("/async-workflow", operation_id="async_workflow")
 async def async_workflow(
     workflow_complexity: str = Query(
         default="medium", regex="^(simple|medium|complex)$", description="Workflow complexity level"),
@@ -427,7 +427,7 @@ async def async_workflow(
     }
 
 
-@router.get("/async-monitor")
+@router.get("/async-monitor", operation_id="async_monitor")
 async def async_monitor(
     monitor_duration: int = Query(
         default=10, ge=5, le=30, description="Monitoring duration in iterations"),
@@ -545,7 +545,7 @@ async def async_monitor(
     }
 
 
-@router.get("/stream-progress")
+@router.get("/stream-progress", operation_id="stream_progress")
 async def stream_progress(
     total_steps: int = Query(default=10, ge=1, le=50,
                              description="Total number of steps to process"),
@@ -623,7 +623,7 @@ async def stream_progress(
     }
 
 
-@router.get("/live-metrics")
+@router.get("/live-metrics", operation_id="live_metrics")
 async def live_metrics(
     metric_count: int = Query(
         default=15, ge=5, le=30, description="Number of metric snapshots to collect"),
