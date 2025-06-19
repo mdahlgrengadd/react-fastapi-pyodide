@@ -61,5 +61,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/your-repo/react-fastapi-pyodide"
+  },
+  "dependencies": {
+    "vite": "^6.3.5"
   }
 }
