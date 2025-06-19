@@ -4,21 +4,22 @@ Main FastAPI application using the pyodide-bridge-py package.
 This uses the enhanced FastAPI class from pyodide-bridge that provides
 seamless Pyodide integration while maintaining full FastAPI compatibility.
 """
-
-import asyncio
-from typing import Dict, Any
-
+from pyodide_bridge import enable_monkey_patch
+enable_monkey_patch(debug=1)  # Enable debug mode for better logging
 # Use the enhanced FastAPI class with Pyodide bridge functionality
-from pyodide_bridge import FastAPI
-
+from fastapi import FastAPI
+from typing import Dict, Any
+import asyncio
 from app.core.deps import get_db, get_current_user
 from app.core.logging import setup_logging, get_logger
 from app.core.settings import settings
 from app.db.init_db import init_db, init_db_sync
 from app.db.session import HAS_ASYNC_SQLALCHEMY, IS_PYODIDE
+from app.api.v1 import router as api_v1_router
+
+
 
 # Import domain routers
-from app.api.v1 import router as api_v1_router
 
 # Setup logging
 setup_logging(debug=settings.debug)

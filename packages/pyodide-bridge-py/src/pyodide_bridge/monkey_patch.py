@@ -73,6 +73,7 @@ def enable(debug: int | None = None) -> None:  # noqa: D401 – imperative style
     # genuinely unavailable (e.g. building docs).
     try:
         import fastapi as _fastapi  # type: ignore
+        from fastapi.routing import APIRouter  # type: ignore
     except ModuleNotFoundError as exc:  # pragma: no cover
         raise RuntimeError(
             "FastAPI must be installed to enable the monkey-patch") from exc
@@ -82,12 +83,86 @@ def enable(debug: int | None = None) -> None:  # noqa: D401 – imperative style
 
     _original_fastapi_cls = _fastapi.FastAPI  # save reference for restore/debug
 
+    # Also patch APIRouter to ensure routes from included routers are registered
+    _patch_api_router(APIRouter)
+
     class _InterceptedFastAPI(_original_fastapi_cls):  # type: ignore[misc]
         """Drop-in replacement that auto-registers routes."""
 
         def __init__(self, *args: Any, **kwargs: Any):
             super().__init__(*args, **kwargs)
             self._patch_route_decorators()
+
+        # ----------------------------------------
+        # Bridge compatibility methods
+        # ----------------------------------------
+        def get_endpoints(self) -> List[Dict[str, Any]]:
+            """Return endpoints in a frontend-friendly shape (serializable)."""
+            return get_endpoints()
+
+        async def execute_endpoint(
+            self,
+            operation_id: str,
+            path_params: Dict[str, Any] | None = None,
+            query_params: Dict[str, Any] | None = None,
+            body: Any = None
+        ) -> Dict[str, Any]:
+            """Execute endpoint by operation_id using the shared registry."""
+            # Import the standalone function to avoid code duplication
+            from .fastapi_bridge import execute_endpoint
+            return await execute_endpoint(operation_id, path_params, query_params, body)
+
+        async def invoke(
+            self,
+            operation_id: str,
+            path_params: Dict[str, Any] | None = None,
+            query_params: Dict[str, Any] | None = None,
+            body: Any = None,
+            **kwargs
+        ) -> Dict[str, Any]:
+            """Invoke endpoint by operation_id - alias for execute_endpoint for bridge compatibility."""
+            return await self.execute_endpoint(operation_id, path_params, query_params, body)
+
+        def include_router(self, router, **kwargs):
+            """Override include_router to register routes from included routers."""
+            # Call the original include_router first
+            result = super().include_router(router, **kwargs)
+            
+            # Extract and register routes from the router
+            self._extract_routes_from_router(router, **kwargs)
+            
+            return result
+
+        def _extract_routes_from_router(self, router, prefix: str = "", **kwargs):
+            """Extract routes from an APIRouter and register them."""
+            router_prefix = kwargs.get("prefix", "") or getattr(router, "prefix", "") or ""
+            full_prefix = prefix + router_prefix
+
+            if hasattr(router, "routes"):
+                for route in router.routes:
+                    # Handle nested routers (Mount objects with sub-routers)
+                    if hasattr(route, "app") and hasattr(route.app, "routes"):
+                        # This is a nested router, recurse into it
+                        nested_prefix = full_prefix + getattr(route, "path", "")
+                        self._extract_routes_from_router(route.app, nested_prefix, **kwargs)
+                    elif hasattr(route, "methods") and hasattr(route, "endpoint"):
+                        # This is a regular route
+                        for method in route.methods:
+                            if method in ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]:
+                                operation_id = getattr(route, "operation_id", None) or route.endpoint.__name__
+                                full_path = full_prefix + route.path
+
+                                _register_route(
+                                    operation_id=operation_id,
+                                    path=full_path,
+                                    method=method,
+                                    handler=route.endpoint,
+                                    dec_kwargs={
+                                        "summary": getattr(route, "summary", None) or route.endpoint.__doc__ or f"{method} {full_path}",
+                                        "tags": kwargs.get("tags", []),
+                                        "response_model": getattr(route, "response_model", None),
+                                    }
+                                )
 
         # ----------------------------------------
         # Decorator patching
@@ -155,6 +230,52 @@ def _register_route(*, operation_id: str, path: str, method: str, handler: Calla
     }
 
 
+def _patch_api_router(APIRouter: Any) -> None:
+    """Patch APIRouter methods to register routes in the global registry."""
+    try:
+        # Store original methods
+        original_get = APIRouter.get
+        original_post = APIRouter.post
+        original_put = APIRouter.put
+        original_patch = APIRouter.patch
+        original_delete = APIRouter.delete
+
+        def make_router_wrapper(orig_method: Callable, method: str):
+            def wrapper(self, path: str, **kwargs):
+                def inner(func: Callable):
+                    # Determine operation_id – fall back to func name if missing
+                    operation_id = kwargs.get("operation_id") or func.__name__
+
+                    # Get router prefix if available
+                    router_prefix = getattr(self, 'prefix', '') or ''
+                    full_path = router_prefix + path
+
+                    # Register in the shared registry (overwrite duplicates)
+                    _register_route(
+                        operation_id=operation_id,
+                        path=full_path,
+                        method=method,
+                        handler=func,
+                        dec_kwargs=kwargs,
+                    )
+
+                    # Call original method
+                    return orig_method(self, path, **kwargs)(func)
+                return inner
+            return wrapper
+
+        # Patch router methods
+        APIRouter.get = make_router_wrapper(original_get, "GET")
+        APIRouter.post = make_router_wrapper(original_post, "POST")
+        APIRouter.put = make_router_wrapper(original_put, "PUT")
+        APIRouter.patch = make_router_wrapper(original_patch, "PATCH")
+        APIRouter.delete = make_router_wrapper(original_delete, "DELETE")
+
+    except Exception as e:
+        # Don't fail the entire monkey-patch if router patching fails
+        warnings.warn(f"APIRouter patching failed: {e}", UserWarning)
+
+
 def get_endpoints() -> List[Dict[str, Any]]:
     """Return endpoints in a frontend-friendly shape (serializable)."""
     result: List[Dict[str, Any]] = []
@@ -163,5 +284,18 @@ def get_endpoints() -> List[Dict[str, Any]]:
         # Replace callable with its __name__ for transport
         if callable(copy.get("handler")):
             copy["handler"] = copy["handler"].__name__
-        result.append(convert_to_serializable(copy))
+        
+        # Convert Python snake_case keys to JavaScript camelCase for frontend compatibility
+        frontend_friendly = {
+            "operationId": copy.get("operation_id"),
+            "path": copy.get("path"),
+            "method": copy.get("method"),
+            "summary": copy.get("summary"),
+            "tags": copy.get("tags", []),
+            "responseModel": copy.get("response_model"),
+            "requestModel": copy.get("request_model"),
+            "handler": copy.get("handler"),
+        }
+        
+        result.append(convert_to_serializable(frontend_friendly))
     return result
