@@ -5,6 +5,7 @@ export { PyodideSwaggerUI } from "./PyodideSwaggerUI";
 
 // Endpoint Components
 export { PyodideEndpointComponent } from "./EndpointComponent";
+export { StreamingEndpointComponent } from "./StreamingEndpointComponent";
 export { SmartEndpoint } from "./SmartEndpoint";
 export { EndpointList } from "./EndpointList";
 export { InteractiveForm } from "./InteractiveForm";

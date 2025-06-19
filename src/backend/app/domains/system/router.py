@@ -543,3 +543,166 @@ async def async_monitor(
         "environment": ENVIRONMENT,
         "note": "This demonstrates real-time async monitoring with concurrent data collection"
     }
+
+
+@router.get("/stream-progress")
+async def stream_progress(
+    total_steps: int = Query(default=10, ge=1, le=50, description="Total number of steps to process"),
+    step_delay: float = Query(default=0.5, ge=0.1, le=3.0, description="Delay between steps in seconds"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Stream processing progress with real-time updates - designed for streaming UI."""
+    
+    # This endpoint is specifically designed to work with the streaming frontend component
+    # It returns the complete result but structures it to support progressive display
+    
+    start_time = datetime.now()
+    processing_steps = []
+    
+    for step in range(1, total_steps + 1):
+        step_start = datetime.now()
+        
+        # Simulate varying work complexity
+        work_complexity = 1 + (step * 0.1) + (step % 3) * 0.2
+        actual_delay = step_delay * work_complexity
+        
+        # Simulate actual async work
+        await asyncio.sleep(actual_delay)
+        
+        step_end = datetime.now()
+        step_duration = (step_end - step_start).total_seconds()
+        
+        # Create step result
+        step_result = {
+            "step": step,
+            "status": "completed",
+            "progress_percent": round((step / total_steps) * 100, 1),
+            "step_duration_seconds": round(step_duration, 3),
+            "complexity_factor": round(work_complexity, 2),
+            "simulated_work": f"Processing item batch {step}: {'⚡' * min(step, 5)} complexity {work_complexity:.1f}",
+            "timestamp": step_end.isoformat(),
+            "cumulative_time": round((step_end - start_time).total_seconds(), 3),
+            "estimated_remaining": round((total_steps - step) * step_delay * 1.1, 1) if step < total_steps else 0
+        }
+        
+        processing_steps.append(step_result)
+    
+    end_time = datetime.now()
+    total_duration = (end_time - start_time).total_seconds()
+    
+    return {
+        "message": f"Stream processing completed - {total_steps} steps in {total_duration:.2f}s",
+        "user": current_user,
+        "stream_processing": {
+            "configuration": {
+                "total_steps": total_steps,
+                "step_delay_seconds": step_delay,
+                "actual_duration": round(total_duration, 3),
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat()
+            },
+            "progress_data": processing_steps,  # This array can be processed incrementally by the frontend
+            "summary": {
+                "average_step_duration": round(total_duration / total_steps, 3),
+                "total_items_processed": total_steps,
+                "processing_rate": round(total_steps / total_duration, 2),
+                "efficiency_score": min(100, round((total_steps * step_delay) / total_duration * 100, 1))
+            }
+        },
+        "frontend_hint": {
+            "streaming_compatible": True,
+            "progressive_field": "stream_processing.progress_data",
+            "step_identifier": "step",
+            "completion_indicator": "status"
+        },
+        "environment": ENVIRONMENT,
+        "note": "This endpoint is optimized for streaming frontend components"
+    }
+
+
+@router.get("/live-metrics")
+async def live_metrics(
+    metric_count: int = Query(default=15, ge=5, le=30, description="Number of metric snapshots to collect"),
+    collection_interval: float = Query(default=0.3, ge=0.1, le=1.0, description="Interval between metric collections"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Collect live system metrics for real-time monitoring dashboard."""
+    
+    start_time = datetime.now()
+    metrics_snapshots = []
+    
+    for snapshot in range(1, metric_count + 1):
+        snapshot_start = datetime.now()
+        
+        # Simulate metric collection with varying response times
+        collection_delay = collection_interval * (0.8 + (snapshot % 4) * 0.1)
+        await asyncio.sleep(collection_delay)
+        
+        snapshot_end = datetime.now()
+        
+        # Generate realistic-looking metrics
+        base_values = {
+            'cpu': 20 + (snapshot * 1.5) + (snapshot % 7) * 8,
+            'memory': 40 + (snapshot * 0.8) + (snapshot % 5) * 6,
+            'disk': 60 + (snapshot % 3) * 4,
+            'network_in': 50 + (snapshot * 2) + (snapshot % 9) * 15,
+            'network_out': 30 + (snapshot * 1.2) + (snapshot % 6) * 8
+        }
+        
+        # Add some randomness and keep within realistic bounds
+        snapshot_data = {
+            "snapshot": snapshot,
+            "timestamp": snapshot_end.isoformat(),
+            "collection_time_ms": round((snapshot_end - snapshot_start).total_seconds() * 1000, 1),
+            "metrics": {
+                "cpu_usage_percent": min(95, max(5, round(base_values['cpu'], 1))),
+                "memory_usage_percent": min(90, max(15, round(base_values['memory'], 1))),
+                "disk_usage_percent": min(85, max(30, round(base_values['disk'], 1))),
+                "network_in_mbps": round(base_values['network_in'], 1),
+                "network_out_mbps": round(base_values['network_out'], 1),
+                "active_connections": 10 + (snapshot % 12),
+                "response_time_ms": round(50 + (snapshot % 8) * 10 + collection_delay * 100, 1)
+            },
+            "status": "normal" if base_values['cpu'] < 80 and base_values['memory'] < 80 else "warning",
+            "elapsed_seconds": round((snapshot_end - start_time).total_seconds(), 2)
+        }
+        
+        metrics_snapshots.append(snapshot_data)
+    
+    end_time = datetime.now()
+    total_duration = (end_time - start_time).total_seconds()
+    
+    # Calculate statistics
+    avg_cpu = sum(s["metrics"]["cpu_usage_percent"] for s in metrics_snapshots) / len(metrics_snapshots)
+    avg_memory = sum(s["metrics"]["memory_usage_percent"] for s in metrics_snapshots) / len(metrics_snapshots)
+    warnings = len([s for s in metrics_snapshots if s["status"] == "warning"])
+    
+    return {
+        "message": f"Live metrics collection completed - {metric_count} snapshots over {total_duration:.2f}s",
+        "user": current_user,
+        "live_monitoring": {
+            "configuration": {
+                "snapshot_count": metric_count,
+                "collection_interval_seconds": collection_interval,
+                "total_duration": round(total_duration, 3),
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat()
+            },
+            "metrics_data": metrics_snapshots,  # Progressive data for streaming
+            "session_analysis": {
+                "average_cpu_percent": round(avg_cpu, 1),
+                "average_memory_percent": round(avg_memory, 1),
+                "warning_count": warnings,
+                "data_quality": "excellent" if warnings < metric_count * 0.3 else "good",
+                "collection_efficiency": round((metric_count * collection_interval) / total_duration * 100, 1)
+            }
+        },
+        "frontend_hint": {
+            "streaming_compatible": True,
+            "progressive_field": "live_monitoring.metrics_data",
+            "step_identifier": "snapshot",
+            "real_time_updates": True
+        },
+        "environment": ENVIRONMENT,
+        "note": "Real-time metrics perfect for dashboard streaming"
+    }
