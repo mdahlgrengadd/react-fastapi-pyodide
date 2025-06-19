@@ -361,14 +361,13 @@ except Exception as e:
 
     try {
       const result = this.pyodide.runPython(`
+import json
 bridge = get_bridge()
+result = "[]"
 if hasattr(bridge, 'get_endpoints'):
     endpoints = bridge.get_endpoints()
-    # Convert to JSON-serializable format
-    import json
-    json.dumps(endpoints)
-else:
-    "[]"
+    result = json.dumps(endpoints)
+result
       `);
 
       return JSON.parse(result as string) as Endpoint[];
@@ -413,7 +412,7 @@ async def call_endpoint():
             operation_id="${operationId}",
             path_params=${JSON.stringify(pathParams)},
             query_params=${JSON.stringify(queryParams)},
-            body=${JSON.stringify(body)}
+            body=json.loads('${JSON.stringify(body)}')
         )
         return json.dumps(result)
     else:

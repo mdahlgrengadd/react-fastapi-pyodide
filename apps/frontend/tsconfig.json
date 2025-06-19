@@ -23,7 +23,8 @@
     /* Path mapping */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "pyodide-bridge-ts": ["../../packages/pyodide-bridge-ts/src"]
     }
   },
   "include": ["src"],

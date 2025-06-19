@@ -38,7 +38,7 @@ function copyDirectory(src, dest) {
 }
 
 function main() {
-  const srcApiDir = path.join(__dirname, "..", "src", "backend");
+  const srcApiDir = path.join(__dirname, "..", "apps", "backend", "src");
   const publicBackendDir = path.join(__dirname, "..", "public", "backend");
 
   // Create the destination directory structure
@@ -48,8 +48,46 @@ function main() {
 
   console.log("Copying Python API files to public/backend...");
 
+  // Also copy the pyodide_bridge package so it can be imported in the browser
+  const pyBridgeSrc = path.join(
+    __dirname,
+    "..",
+    "packages",
+    "pyodide-bridge-py",
+    "src",
+    "pyodide_bridge"
+  );
+  const pyBridgeDest = path.join(publicBackendDir, "pyodide_bridge");
+
   // Copy all Python files from src/backend to public/backend preserving directory structure
   copyDirectory(srcApiDir, publicBackendDir);
+  // Copy Python bridge package
+  copyDirectory(pyBridgeSrc, pyBridgeDest);
+
+  // Generate a file list for the frontend to fetch and mount into Pyodide FS
+  const fileList = [];
+  function collectFiles(dir, base = dir) {
+    const items = fs.readdirSync(dir);
+    for (const item of items) {
+      const full = path.join(dir, item);
+      const rel = path.relative(base, full).replace(/\\/g, "/");
+      if (fs.statSync(full).isDirectory()) {
+        if (item === "__pycache__") continue;
+        collectFiles(full, base);
+      } else if (item.endsWith(".py")) {
+        fileList.push(rel);
+      }
+    }
+  }
+
+  collectFiles(publicBackendDir);
+
+  fs.writeFileSync(
+    path.join(publicBackendDir, "backend_filelist.json"),
+    JSON.stringify(fileList, null, 2)
+  );
+  console.log(`Generated backend_filelist.json with ${fileList.length} files`);
+
   // Create an __init__.py file in the root to make it a proper Python package
   const initContent = `# API package for Pyodide
 # This directory structure is mirrored from src/backend/
