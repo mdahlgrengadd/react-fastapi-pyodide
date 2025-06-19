@@ -1,46 +1,46 @@
 import "swagger-ui-react/swagger-ui.css";
 
-import React, { Suspense, useEffect, useState } from "react";
-import SwaggerUI from "swagger-ui-react"; // ← static import
+import React, { lazy, Suspense, useEffect, useState } from "react";
 
 import { pyodideEngine } from "./index";
 
-// // Lazy load SwaggerUI to reduce initial bundle size, with error handling
-// const SwaggerUI = lazy(async () => {
-//   try {
-//     return await import("swagger-ui-react");
-//   } catch (error) {
-//     console.warn("Failed to load SwaggerUI:", error);
-//     // Return a fallback component
-//     return {
-//       default: () => (
-//         <div style={{ padding: "20px", textAlign: "center" }}>
-//           <h2>API Documentation</h2>
-//           <p>
-//             SwaggerUI failed to load. This might be due to a development mode
-//             bundling issue.
-//           </p>
-//           <p>
-//             Try running in preview mode instead:{" "}
-//             <code>npm run preview:gh-pages</code>
-//           </p>
-//           <details style={{ marginTop: "20px", textAlign: "left" }}>
-//             <summary>Error Details</summary>
-//             <pre
-//               style={{
-//                 background: "#f5f5f5",
-//                 padding: "10px",
-//                 marginTop: "10px",
-//               }}
-//             >
-//               {error?.toString() || "Unknown error loading SwaggerUI"}
-//             </pre>
-//           </details>
-//         </div>
-//       ),
-//     };
-//   }
-// });
+// import SwaggerUI from "swagger-ui-react"; //  static import
+// Lazy load SwaggerUI to reduce initial bundle size, with error handling
+const SwaggerUI = lazy(async () => {
+  try {
+    return await import("swagger-ui-react");
+  } catch (error) {
+    console.warn("Failed to load SwaggerUI:", error);
+    // Return a fallback component
+    return {
+      default: () => (
+        <div style={{ padding: "20px", textAlign: "center" }}>
+          <h2>API Documentation</h2>
+          <p>
+            SwaggerUI failed to load. This might be due to a development mode
+            bundling issue.
+          </p>
+          <p>
+            Try running in preview mode instead:{" "}
+            <code>npm run preview:gh-pages</code>
+          </p>
+          <details style={{ marginTop: "20px", textAlign: "left" }}>
+            <summary>Error Details</summary>
+            <pre
+              style={{
+                background: "#f5f5f5",
+                padding: "10px",
+                marginTop: "10px",
+              }}
+            >
+              {error?.toString() || "Unknown error loading SwaggerUI"}
+            </pre>
+          </details>
+        </div>
+      ),
+    };
+  }
+});
 
 interface PyodideSwaggerUIProps {
   onError?: (error: Error) => void;
