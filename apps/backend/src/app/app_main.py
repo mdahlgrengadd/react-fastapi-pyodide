@@ -95,46 +95,7 @@ async def read_root(current_user: Dict[str, Any] = get_current_user):
             "operation_id enforcement",
             "Improved serialization",
             "Streaming support"
-        ]
-    }
-
-
-# Add bridge-specific endpoints
-@app.get("/bridge/endpoints",
-         operation_id="get_bridge_endpoints",
-         summary="Get bridge endpoints",
-         tags=["bridge"])
-async def get_bridge_endpoints():
-    """Get list of registered bridge endpoints."""
-    return app.get_endpoints()
-
-
-@app.get("/bridge/registry",
-         operation_id="get_bridge_registry",
-         summary="Get bridge registry",
-         tags=["bridge"])
-async def get_bridge_registry():
-    """Get the internal bridge registry for debugging."""
-    return app.get_registry()
-
-
-@app.post("/bridge/invoke/{operation_id}",
-          operation_id="invoke_bridge_endpoint",
-          summary="Invoke endpoint via bridge",
-          tags=["bridge"])
-async def invoke_bridge_endpoint(
-    operation_id: str,
-    path_params: Dict[str, Any] = None,
-    query_params: Dict[str, Any] = None,
-    body: Any = None
-):
-    """Invoke any registered endpoint via the bridge."""
-    return await app.invoke(
-        operation_id=operation_id,
-        path_params=path_params or {},
-        query_params=query_params or {},
-        body=body
-    )
+        ]}
 
 
 # Log app creation

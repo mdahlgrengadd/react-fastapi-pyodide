@@ -54,6 +54,8 @@ class FastAPI(OriginalFastAPI if HAS_FASTAPI else object):
         """Initialize bridge-specific functionality."""
         # Override route decorators to capture route information
         self._patch_route_methods()
+        # Add bridge-specific endpoints
+        self._add_bridge_endpoints()
         logger.info("FastAPI (with Pyodide bridge) initialized")
 
     def _patch_route_methods(self) -> None:
@@ -65,6 +67,43 @@ class FastAPI(OriginalFastAPI if HAS_FASTAPI else object):
 
         # Also override include_router to capture routes from sub-routers
         self._original_include_router = super().include_router
+
+    def _add_bridge_endpoints(self) -> None:
+        """Add bridge-specific endpoints for introspection and invocation."""
+
+        @self.get("/bridge/endpoints",
+                  operation_id="get_bridge_endpoints",
+                  summary="Get bridge endpoints",
+                  tags=["bridge"])
+        async def get_bridge_endpoints():
+            """Get list of registered bridge endpoints."""
+            return self.get_endpoints()
+
+        @self.get("/bridge/registry",
+                  operation_id="get_bridge_registry",
+                  summary="Get bridge registry",
+                  tags=["bridge"])
+        async def get_bridge_registry():
+            """Get the internal bridge registry for debugging."""
+            return self.get_registry()
+
+        @self.post("/bridge/invoke/{operation_id}",
+                   operation_id="invoke_bridge_endpoint",
+                   summary="Invoke endpoint via bridge",
+                   tags=["bridge"])
+        async def invoke_bridge_endpoint(
+            operation_id: str,
+            path_params: Dict[str, Any] = None,
+            query_params: Dict[str, Any] = None,
+            body: Any = None
+        ):
+            """Invoke any registered endpoint via the bridge."""
+            return await self.invoke(
+                operation_id=operation_id,
+                path_params=path_params or {},
+                query_params=query_params or {},
+                body=body
+            )
 
     def _make_route_wrapper(self, original_method: Callable, http_method: str):
         """Create a wrapper for route methods that captures route information."""
