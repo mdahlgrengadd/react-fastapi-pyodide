@@ -1,6 +1,7 @@
 """System domain router."""
+import asyncio
 from datetime import datetime
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.core.deps import get_current_user
 from app.core.runtime import get_environment_info
@@ -35,6 +36,7 @@ def read_root(current_user: dict = Depends(get_current_user)):
             "Full dependency injection",
             "Standard FastAPI patterns",
             "Zero code changes needed",
+            "Async endpoint support",
             "Persistent storage (survives reloads)" if is_persistent else "In-memory storage (resets on reload)"
         ],
         "endpoints": {
@@ -42,6 +44,7 @@ def read_root(current_user: dict = Depends(get_current_user)):
             "user": "/users/1 - Get single user (SQLAlchemy model)",
             "posts": "/posts - Get all posts (with relationships)",
             "dashboard": "/dashboard - Complex mixed response",
+            "async_demo": "/system/async-demo - Async endpoint demonstration",
             "persistence": "/persistence/status - Detailed persistence information",
             "docs": "/docs - Interactive API documentation"
         },
@@ -98,4 +101,445 @@ def get_persistence_status(current_user: dict = Depends(get_current_user)):
             "timestamp": datetime.utcnow(),
             "message": "Persistence status checked successfully"
         }
+    }
+
+
+@router.get("/system/async-demo",
+            summary="Async endpoint demonstration",
+            description="Demonstrates async functionality with simulated work",
+            tags=["system"],
+            operation_id="async_demo")
+async def async_demo(current_user: dict = Depends(get_current_user)):
+    """Demonstrate async functionality with simulated async work."""
+    start_time = datetime.utcnow()
+
+    # Simulate some async work
+    steps = []
+
+    steps.append({
+        "step": 1,
+        "action": "Starting async operation",
+        "timestamp": datetime.utcnow(),
+        "status": "started"
+    })
+
+    # Simulate async database query
+    await asyncio.sleep(0.1)  # 100ms delay
+    steps.append({
+        "step": 2,
+        "action": "Simulated database query",
+        "timestamp": datetime.utcnow(),
+        "status": "completed"
+    })
+
+    # Simulate async API call
+    await asyncio.sleep(0.15)  # 150ms delay
+    steps.append({
+        "step": 3,
+        "action": "Simulated external API call",
+        "timestamp": datetime.utcnow(),
+        "status": "completed"
+    })
+
+    # Simulate async processing
+    await asyncio.sleep(0.05)  # 50ms delay
+    steps.append({
+        "step": 4,
+        "action": "Data processing",
+        "timestamp": datetime.utcnow(),
+        "status": "completed"
+    })
+
+    end_time = datetime.utcnow()
+    total_duration = (end_time - start_time).total_seconds()
+
+    return {
+        "message": "Async demonstration completed successfully",
+        "user": current_user,
+        "async_demo": {
+            "total_duration_seconds": total_duration,
+            "start_time": start_time,
+            "end_time": end_time,
+            "steps_completed": len(steps),
+            "execution_steps": steps
+        },
+        "environment": get_environment_info(),
+        "note": "This endpoint demonstrates async/await functionality in Pyodide"
+    }
+
+
+@router.get("/health-async")
+async def health_check_async(current_user: dict = Depends(get_current_user)):
+    """Async health check endpoint demonstrating async operations."""
+    start_time = datetime.now()
+
+    # Simulate some async work
+    await asyncio.sleep(0.1)
+
+    end_time = datetime.now()
+    duration = (end_time - start_time).total_seconds()
+
+    return {
+        "status": "healthy",
+        "async": True,
+        "duration_seconds": duration,
+        "timestamp": end_time.isoformat(),
+        "environment": ENVIRONMENT,
+        "database_url": DATABASE_URL.replace("sqlite:///", "").split("/")[-1] if "sqlite" in DATABASE_URL else "async-capable",
+        "user": current_user,
+        "message": "Async health check completed successfully"
+    }
+
+
+@router.get("/async-simulation")
+async def async_simulation(
+    steps: int = Query(default=5, ge=1, le=20,
+                       description="Number of simulation steps"),
+    delay: float = Query(default=0.1, ge=0.01, le=1.0,
+                         description="Delay between steps in seconds"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Simulate async processing with multiple steps to demonstrate real async behavior."""
+    start_time = datetime.now()
+    results = []
+
+    for step in range(1, steps + 1):
+        step_start = datetime.now()
+
+        # Simulate async work with varying delays
+        step_delay = delay * (0.5 + step * 0.1)  # Variable delay per step
+        await asyncio.sleep(step_delay)
+
+        step_end = datetime.now()
+        step_duration = (step_end - step_start).total_seconds()
+
+        results.append({
+            "step": step,
+            "status": "completed",
+            "duration_seconds": round(step_duration, 3),
+            "simulated_work": f"Processing batch {step} of {steps}",
+            "timestamp": step_end.isoformat()
+        })
+
+    end_time = datetime.now()
+    total_duration = (end_time - start_time).total_seconds()
+
+    return {
+        "message": f"Async simulation completed with {steps} steps",
+        "user": current_user,
+        "simulation": {
+            "total_steps": steps,
+            "delay_per_step": delay,
+            "results": results,
+            "summary": {
+                "total_duration_seconds": round(total_duration, 3),
+                "average_step_duration": round(total_duration / steps, 3),
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat()
+            }
+        },
+        "environment": ENVIRONMENT,
+        "note": "This demonstrates sequential async operations with variable timing"
+    }
+
+
+@router.get("/async-data-stream")
+async def async_data_stream(
+    batch_size: int = Query(default=3, ge=1, le=10,
+                            description="Number of items per batch"),
+    batches: int = Query(default=4, ge=1, le=8,
+                         description="Number of batches to process"),
+    processing_delay: float = Query(
+        default=0.08, ge=0.01, le=0.5, description="Processing delay per batch"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Simulate async data streaming with batch processing."""
+
+    async def process_data_batch(batch_num: int, items: int) -> dict:
+        """Simulate processing a batch of data asynchronously."""
+        start_time = datetime.now()
+
+        # Simulate variable processing time based on batch complexity
+        complexity_factor = 1 + (batch_num * 0.2)
+        actual_delay = processing_delay * complexity_factor
+        await asyncio.sleep(actual_delay)
+
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+
+        # Simulate some processed data
+        processed_items = []
+        for i in range(items):
+            processed_items.append({
+                "item_id": f"batch_{batch_num}_item_{i+1}",
+                "value": round(42.5 + (batch_num * 10) + (i * 2.3), 2),
+                "status": "processed",
+                "metadata": {
+                    "batch": batch_num,
+                    "position": i + 1,
+                    "complexity": round(complexity_factor, 2)
+                }
+            })
+
+        return {
+            "batch_number": batch_num,
+            "items_processed": items,
+            "processing_time_seconds": round(duration, 3),
+            "complexity_factor": round(complexity_factor, 2),
+            "data": processed_items,
+            "timestamp": end_time.isoformat()
+        }
+
+    start_time = datetime.now()
+
+    # Create async tasks for all batches
+    tasks = []
+    for batch_num in range(1, batches + 1):
+        task = asyncio.create_task(
+            process_data_batch(batch_num, batch_size),
+            name=f"batch_{batch_num}"
+        )
+        tasks.append(task)
+
+    # Process batches concurrently
+    batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    end_time = datetime.now()
+    total_duration = (end_time - start_time).total_seconds()
+
+    # Calculate statistics
+    successful_batches = [
+        r for r in batch_results if not isinstance(r, Exception)]
+    total_items = sum(batch["items_processed"] for batch in successful_batches)
+    avg_processing_time = sum(batch["processing_time_seconds"]
+                              for batch in successful_batches) / len(successful_batches) if successful_batches else 0
+
+    return {
+        "message": f"Async data stream processed {batches} batches concurrently",
+        "user": current_user,
+        "stream_results": {
+            "configuration": {
+                "batch_size": batch_size,
+                "total_batches": batches,
+                "base_processing_delay": processing_delay
+            },
+            "execution": {
+                "total_duration_seconds": round(total_duration, 3),
+                "average_batch_processing_time": round(avg_processing_time, 3),
+                "concurrent_execution": True,
+                "successful_batches": len(successful_batches),
+                "total_items_processed": total_items
+            },
+            "batches": successful_batches,
+            "performance_metrics": {
+                "throughput_items_per_second": round(total_items / total_duration if total_duration > 0 else 0, 2),
+                "efficiency_gain": f"~{round((batches * avg_processing_time) / total_duration if total_duration > 0 else 1, 1)}x faster than sequential",
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat()
+            }
+        },
+        "environment": ENVIRONMENT,
+        "note": "This demonstrates concurrent async batch processing with performance optimization"
+    }
+
+
+@router.get("/async-workflow")
+async def async_workflow(
+    workflow_complexity: str = Query(
+        default="medium", regex="^(simple|medium|complex)$", description="Workflow complexity level"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Demonstrate a complex async workflow with multiple stages."""
+
+    complexity_config = {
+        "simple": {"stages": 3, "base_delay": 0.05, "parallel_tasks": 2},
+        "medium": {"stages": 5, "base_delay": 0.08, "parallel_tasks": 3},
+        "complex": {"stages": 7, "base_delay": 0.12, "parallel_tasks": 4}
+    }
+
+    config = complexity_config[workflow_complexity]
+    start_time = datetime.now()
+    workflow_results = []
+
+    for stage in range(1, config["stages"] + 1):
+        stage_start = datetime.now()
+
+        # Create parallel tasks for each stage
+        async def stage_task(task_id: int) -> dict:
+            task_start = datetime.now()
+            delay = config["base_delay"] * \
+                (1 + (stage * 0.1) + (task_id * 0.05))
+            await asyncio.sleep(delay)
+            task_end = datetime.now()
+
+            return {
+                "task_id": task_id,
+                "stage": stage,
+                "duration_seconds": round((task_end - task_start).total_seconds(), 3),
+                "result": f"Stage {stage} Task {task_id} completed",
+                "timestamp": task_end.isoformat()
+            }
+
+        # Execute parallel tasks for this stage
+        stage_tasks = [
+            asyncio.create_task(stage_task(task_id))
+            for task_id in range(1, config["parallel_tasks"] + 1)
+        ]
+
+        task_results = await asyncio.gather(*stage_tasks)
+        stage_end = datetime.now()
+        stage_duration = (stage_end - stage_start).total_seconds()
+
+        workflow_results.append({
+            "stage": stage,
+            "parallel_tasks": config["parallel_tasks"],
+            "stage_duration_seconds": round(stage_duration, 3),
+            "tasks": task_results,
+            "stage_completed_at": stage_end.isoformat()
+        })
+
+    end_time = datetime.now()
+    total_duration = (end_time - start_time).total_seconds()
+    total_tasks = config["stages"] * config["parallel_tasks"]
+
+    return {
+        "message": f"Complex async workflow '{workflow_complexity}' completed successfully",
+        "user": current_user,
+        "workflow": {
+            "complexity": workflow_complexity,
+            "configuration": config,
+            "execution_summary": {
+                "total_stages": config["stages"],
+                "total_tasks": total_tasks,
+                "total_duration_seconds": round(total_duration, 3),
+                "average_stage_duration": round(total_duration / config["stages"], 3),
+                "tasks_per_second": round(total_tasks / total_duration if total_duration > 0 else 0, 2)
+            },
+            "stages": workflow_results,
+            "timing": {
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat(),
+                "efficiency": f"Processed {total_tasks} tasks across {config['stages']} stages"
+            }
+        },
+        "environment": ENVIRONMENT,
+        "note": "This demonstrates multi-stage async workflows with parallel task execution"
+    }
+
+
+@router.get("/async-monitor")
+async def async_monitor(
+    monitor_duration: int = Query(
+        default=10, ge=5, le=30, description="Monitoring duration in iterations"),
+    check_interval: float = Query(
+        default=0.15, ge=0.05, le=0.5, description="Interval between checks"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Real-time async monitoring simulation with live metrics."""
+
+    start_time = datetime.now()
+    monitoring_data = []
+
+    async def collect_system_metrics(iteration: int) -> dict:
+        """Simulate collecting system metrics asynchronously."""
+        check_start = datetime.now()
+
+        # Simulate varying response times for different metrics
+        await asyncio.sleep(check_interval * (0.8 + (iteration % 3) * 0.1))
+
+        check_end = datetime.now()
+        response_time = (check_end - check_start).total_seconds()
+
+        # Generate realistic-looking metrics
+        base_cpu = 25 + (iteration * 2) + (iteration % 7) * 5
+        cpu_usage = min(95, max(10, base_cpu + (iteration % 11) * 3))
+
+        memory_base = 45 + (iteration * 1.5)
+        memory_usage = min(90, max(20, memory_base + (iteration % 5) * 4))
+
+        return {
+            "iteration": iteration,
+            "timestamp": check_end.isoformat(),
+            "response_time_ms": round(response_time * 1000, 1),
+            "metrics": {
+                "cpu_usage_percent": round(cpu_usage, 1),
+                "memory_usage_percent": round(memory_usage, 1),
+                "active_connections": 12 + (iteration % 8),
+                "requests_per_minute": 150 + (iteration * 5) + (iteration % 13) * 10,
+                "async_tasks_running": 3 + (iteration % 4)
+            },
+            "status": "healthy" if cpu_usage < 80 and memory_usage < 85 else "warning",
+            "iteration_duration_seconds": round(response_time, 3)
+        }
+
+    # Collect metrics in real-time
+    for i in range(1, monitor_duration + 1):
+        iteration_start = datetime.now()
+
+        # Create monitoring task
+        metrics_task = asyncio.create_task(collect_system_metrics(i))
+
+        # Simulate other concurrent monitoring activities
+        async def background_check():
+            await asyncio.sleep(check_interval * 0.3)
+            return {"background_task": f"check_{i}", "status": "completed"}
+
+        background_task = asyncio.create_task(background_check())
+
+        # Wait for both tasks
+        metrics, background = await asyncio.gather(metrics_task, background_task)
+
+        iteration_end = datetime.now()
+        iteration_time = (iteration_end - iteration_start).total_seconds()
+
+        monitoring_data.append({
+            **metrics,
+            "background_checks": background,
+            "total_iteration_time": round(iteration_time, 3)
+        })
+
+    end_time = datetime.now()
+    total_monitoring_time = (end_time - start_time).total_seconds()
+
+    # Calculate monitoring statistics
+    avg_response_time = sum(item["response_time_ms"]
+                            for item in monitoring_data) / len(monitoring_data)
+    avg_cpu = sum(item["metrics"]["cpu_usage_percent"]
+                  for item in monitoring_data) / len(monitoring_data)
+    avg_memory = sum(item["metrics"]["memory_usage_percent"]
+                     for item in monitoring_data) / len(monitoring_data)
+
+    warnings = [item for item in monitoring_data if item["status"] == "warning"]
+
+    return {
+        "message": f"Real-time async monitoring completed - {monitor_duration} iterations",
+        "user": current_user,
+        "monitoring_session": {
+            "configuration": {
+                "duration_iterations": monitor_duration,
+                "check_interval_seconds": check_interval,
+                "total_monitoring_time": round(total_monitoring_time, 3)
+            },
+            "live_data": monitoring_data,
+            "session_summary": {
+                "total_checks": len(monitoring_data),
+                "average_response_time_ms": round(avg_response_time, 1),
+                "monitoring_efficiency": f"{round((monitor_duration * check_interval) / total_monitoring_time * 100, 1)}%",
+                "system_health": {
+                    "average_cpu_percent": round(avg_cpu, 1),
+                    "average_memory_percent": round(avg_memory, 1),
+                    "warnings_detected": len(warnings),
+                    "overall_status": "healthy" if len(warnings) < monitor_duration * 0.3 else "needs_attention"
+                }
+            },
+            "performance_analysis": {
+                "concurrent_operations": "background checks + metrics collection",
+                "async_efficiency": "Real-time monitoring with minimal blocking",
+                "scalability": f"Processed {monitor_duration * 2} async operations",
+                "start_time": start_time.isoformat(),
+                "end_time": end_time.isoformat()
+            }
+        },
+        "environment": ENVIRONMENT,
+        "note": "This demonstrates real-time async monitoring with concurrent data collection"
     }

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 
-from app.domains.models import User
+from app.domains.models import User, Post
 from app.domains.users.schemas import UserCreate, UserUpdate
 
 
@@ -115,3 +115,13 @@ class UserService:
             return result.scalar()
         else:
             return self.db.query(User).filter(User.is_active == True).count()
+
+    async def get_posts_by_user(self, user_id: int) -> List[Post]:
+        """Get all posts by a specific user."""
+        if isinstance(self.db, AsyncSession):
+            stmt = select(Post).where(Post.author_id ==
+                                      user_id).order_by(Post.created_at.desc())
+            result = await self.db.execute(stmt)
+            return list(result.scalars().all())
+        else:
+            return self.db.query(Post).filter(Post.author_id == user_id).order_by(Post.created_at.desc()).all()
