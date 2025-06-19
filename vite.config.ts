@@ -91,6 +91,10 @@ export default defineConfig({
         },
       },
     },
+    // Add CommonJS wrapping for core-js-pure helpers so that default exports exist
+    commonjsOptions: {
+      include: [/core-js-pure/, /node_modules/],
+    },
     // Enable compression and optimization
     minify: "terser",
     terserOptions: {
@@ -103,9 +107,30 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
   },
   optimizeDeps: {
-    include: ["react", "react-dom", "react-router-dom", "react-query", "axios"],
+    include: [
+      "react",
+      "react-dom",
+      "react-router-dom",
+      "react-query",
+      "axios",
+      // Ensure the Babel helpers used by swagger-ui-react get pre-bundled
+      "core-js-pure/features/object/assign",
+      "core-js-pure/features/object/assign.js",
+      "core-js-pure/features/object/define-property",
+      "core-js-pure/features/object/define-property.js",
+      "core-js-pure/features/instance/bind",
+      "core-js-pure/features/instance/bind.js",
+      "core-js-pure/features/symbol",
+      "core-js-pure/features/symbol.js",
+      // Immutable library required by swagger-ui-react helpers
+      "immutable",
+      "immutable/dist/immutable.js",
+      // Pre-bundle swagger-ui-react itself so that all its transitive deps
+      // (immutable, deepmerge, core-js-pure helpers, etc.) are wrapped once
+      "swagger-ui-react",
+    ],
     // Don't pre-bundle large external dependencies
-    exclude: ["lucide-react", "swagger-ui-react"],
+    exclude: ["lucide-react"],
   },
   server: {
     // Development server optimizations

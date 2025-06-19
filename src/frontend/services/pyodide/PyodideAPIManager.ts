@@ -1,5 +1,5 @@
-import { PYODIDE_CONFIG } from './constants';
-import { PyodideInterface } from './types';
+import { PYODIDE_CONFIG } from "./constants";
+import { PyodideInterface } from "./types";
 
 export class PyodideAPIManager {
   constructor(private pyodide: PyodideInterface) {}
@@ -14,17 +14,17 @@ export class PyodideAPIManager {
       // Create API directory structure in IDBFS
       for (const path of PYODIDE_CONFIG.API_PATHS) {
         this.pyodide.FS.mkdirTree(path);
-      }
-
-      // Load and write Python API files from public/pyodide
+      } // Load and write Python API files from public/backend/app
+      console.log("🔧 BASE_URL:", import.meta.env.BASE_URL);
       for (const fileName of PYODIDE_CONFIG.API_FILES) {
         try {
-          // Use the correct base path for GitHub Pages deployment
+          // Use the correct base path for the new modular structure
           const basePath = import.meta.env.BASE_URL || "/";
           const apiFileUrl = `${basePath}backend${fileName}`.replace(
             /\/+/g,
             "/"
           );
+          console.log(`🔗 Loading: ${apiFileUrl}`);
           const response = await fetch(apiFileUrl);
           if (response.ok) {
             const content = await response.text();
@@ -63,18 +63,72 @@ print(f" Changed working directory to {os.getcwd()}")
       // Continue without API structure
     }
   }
-
   /**
    * Load the FastAPI bridge from the modular API structure
    */
   async loadFastAPIBridge(): Promise<void> {
     console.log(" Loading FastAPI bridge from modular structure...");
-
     try {
-      // Load the bridge from the persistent API directory
+      // Import the bridge from the persistent API directory using Python import
       await this.pyodide.runPythonAsync(`
-# Load the FastAPI bridge from the persistent API directory
-exec(open("/persist/api/bridge.py").read())
+# Import the FastAPI bridge from the persistent API directory
+import sys
+import os
+
+# Ensure we're in the right directory and it's in the path
+if "/persist/api" not in sys.path:
+    sys.path.insert(0, "/persist/api")
+
+# Change to the API directory if we're not already there
+if not os.getcwd().endswith("/persist/api"):
+    os.chdir("/persist/api")
+
+# Try to import the bridge module properly
+try:
+    from app.core.bridge import EnhancedFastAPIBridge, execute_endpoint, get_endpoints, get_openapi_schema
+    # Create a global bridge instance
+    bridge = EnhancedFastAPIBridge()
+    print("✅ Successfully imported and created bridge from modular structure!")
+    
+    # Import the app to ensure all routes are loaded first
+    print("📱 Loading FastAPI app...")
+    from app.app_main import app
+    print("✅ FastAPI app loaded successfully!")
+    
+    # Now initialize the database after the app is ready
+    try:
+        from app.db.init_db import init_db_sync
+        print("🗄️ Initializing database...")
+        init_db_sync()
+        print("✅ Database initialized successfully!")
+    except Exception as e:
+        print(f"⚠️ Database initialization failed: {e}")
+        print(f"🔍 Error details: {type(e).__name__}: {str(e)}")
+        # Continue anyway - the error will be shown when endpoints are called
+except ImportError as e:
+    print(f"❌ Failed to import modular bridge: {e}")
+    # Fall back to executing the file directly
+    exec(open("/persist/api/app/core/bridge.py").read())
+    # Create bridge instance after exec
+    from app.core.bridge import EnhancedFastAPIBridge, execute_endpoint, get_endpoints, get_openapi_schema
+    bridge = EnhancedFastAPIBridge()
+    print("✅ Bridge loaded via exec fallback")
+    
+    # Import the app to ensure all routes are loaded first
+    print("📱 Loading FastAPI app...")
+    from app.app_main import app
+    print("✅ FastAPI app loaded successfully!")
+    
+    # Now initialize the database after the app is ready
+    try:
+        from app.db.init_db import init_db_sync
+        print("🗄️ Initializing database...")
+        init_db_sync()
+        print("✅ Database initialized successfully!")
+    except Exception as e:
+        print(f"⚠️ Database initialization failed: {e}")
+        print(f"🔍 Error details: {type(e).__name__}: {str(e)}")
+        # Continue anyway - the error will be shown when endpoints are called
       `);
       console.log(" Enhanced FastAPI bridge loaded from modular structure!");
     } catch (error) {
@@ -85,7 +139,7 @@ exec(open("/persist/api/bridge.py").read())
 
       // Fallback: fetch from public directory
       const basePath = import.meta.env.BASE_URL || "/";
-      const bridgeModuleUrl = `${basePath}backend/bridge.py`.replace(
+      const bridgeModuleUrl = `${basePath}backend/app/core/bridge.py`.replace(
         /\/+/g,
         "/"
       );
@@ -98,17 +152,26 @@ exec(open("/persist/api/bridge.py").read())
       console.log(" Enhanced FastAPI bridge loaded from fallback!");
     }
   }
-
   /**
    * Reset the FastAPI app and bridge for new code
    */
   async resetFastAPIBridge(): Promise<void> {
-    // Reset the bridge for new code
+    // Reset the bridge for new code - but safely check if variables exist first
     await this.pyodide.runPythonAsync(`
-# Reset the enhanced bridge for new code - clear app instance and registry
-_app = None
-_endpoints_registry.clear()
-bridge = EnhancedFastAPIBridge()
+# Reset the enhanced bridge for new code - clear app instance and registry safely
+try:
+    if '_app' in globals():
+        _app = None
+    if '_endpoints_registry' in globals():
+        _endpoints_registry.clear()
+    if 'bridge' in globals():
+        bridge = EnhancedFastAPIBridge()
+    else:
+        # Bridge not loaded yet, that's fine
+        pass
+except NameError:
+    # Variables don't exist yet, that's fine - first run
+    pass
 `);
   }
 }
