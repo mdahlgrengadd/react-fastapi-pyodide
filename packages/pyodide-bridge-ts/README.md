@@ -1,0 +1,305 @@
+# pyodide-bridge-ts
+
+A TypeScript bridge package that provides seamless integration between React applications and FastAPI backends running in Pyodide (WebAssembly Python).
+
+## 🚀 Features
+
+- **🔒 Type Safety**: Full TypeScript support with comprehensive type definitions
+- **🌊 Streaming Support**: Real-time streaming of endpoint responses  
+- **🧭 Router Integration**: Native React Router integration
+- **🚨 Error Handling**: Robust error handling and propagation
+- **📡 Event System**: Event-driven architecture for real-time updates
+- **💾 Persistence**: IndexedDB persistence for Python packages and data
+- **⚡ Performance**: Optimized for browser-based Python execution
+
+## 📦 Installation
+
+```bash
+npm install pyodide-bridge-ts
+```
+
+### Peer Dependencies
+- `pyodide >= 0.27.0`
+
+## 🎯 Quick Start
+
+```typescript
+import { Bridge } from 'pyodide-bridge-ts';
+import { loadPyodide } from 'pyodide';
+
+// Initialize Pyodide
+const pyodide = await loadPyodide();
+
+// Create bridge instance
+const bridge = new Bridge({
+  pyodide,
+  persistence: true,
+  baseUrl: '/api'
+});
+
+// Initialize the bridge
+await bridge.init();
+
+// Call a Python endpoint
+const response = await bridge.call('/users', {
+  method: 'GET'
+});
+
+console.log(response.data);
+```
+
+## 📚 API Reference
+
+### Bridge Class
+
+The main class for managing Pyodide-FastAPI integration.
+
+#### Constructor
+
+```typescript
+new Bridge(config: BridgeConfig)
+```
+
+**BridgeConfig Options:**
+```typescript
+interface BridgeConfig {
+  pyodide: PyodideInterface;          // Pyodide instance
+  persistence?: boolean;              // Enable IndexedDB persistence
+  baseUrl?: string;                   // API base URL
+  timeout?: number;                   // Request timeout (ms)
+  retries?: number;                   // Number of retries
+  debug?: boolean;                    // Enable debug logging
+  packages?: string[];                // Python packages to install
+  onProgress?: (progress: number) => void; // Installation progress callback
+}
+```
+
+#### Methods
+
+##### `init(): Promise<void>`
+Initialize the bridge and set up the Pyodide environment.
+
+```typescript
+await bridge.init();
+```
+
+##### `call(path: string, params?: CallParams): Promise<ApiResponse>`
+Make a call to a Python endpoint.
+
+```typescript
+const response = await bridge.call('/users/123', {
+  method: 'GET',
+  headers: { 'Authorization': 'Bearer token' }
+});
+```
+
+**CallParams:**
+```typescript
+interface CallParams {
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+  headers?: Record<string, string>;
+  body?: any;
+  query?: Record<string, string>;
+  timeout?: number;
+}
+```
+
+##### `stream(path: string, params?: CallParams): AsyncGenerator<StreamChunk>`
+Stream responses from a Python endpoint.
+
+```typescript
+for await (const chunk of bridge.stream('/data/stream')) {
+  console.log('Received:', chunk.data);
+}
+```
+
+##### `typed<T>(): TypedCall<T>`
+Create a typed caller for specific endpoint schemas.
+
+```typescript
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+const typedBridge = bridge.typed<User>();
+const user = await typedBridge.call('/users/123');
+// user is typed as User
+```
+
+##### `loadFile(path: string): Promise<void>`
+Load a Python file into the Pyodide environment.
+
+```typescript
+await bridge.loadFile('/backend/main.py');
+```
+
+##### `installPackages(packages: string[]): Promise<void>`
+Install Python packages via micropip.
+
+```typescript
+await bridge.installPackages(['requests', 'pandas']);
+```
+
+##### `getStorageInfo(): Promise<StorageInfo>`
+Get information about persistent storage usage.
+
+```typescript
+const info = await bridge.getStorageInfo();
+console.log(`Used: ${info.used} bytes`);
+```
+
+### Event System
+
+The bridge emits events for monitoring and debugging:
+
+```typescript
+bridge.on('init:start', () => console.log('Initialization started'));
+bridge.on('init:complete', () => console.log('Initialization complete'));
+bridge.on('call:start', (path) => console.log(`Calling ${path}`));
+bridge.on('call:complete', (path, response) => console.log(`Response from ${path}`));
+bridge.on('error', (error) => console.error('Bridge error:', error));
+```
+
+### Error Handling
+
+The package provides specific error types:
+
+```typescript
+import { BridgeError, InitializationError, CallError } from 'pyodide-bridge-ts';
+
+try {
+  await bridge.call('/api/endpoint');
+} catch (error) {
+  if (error instanceof CallError) {
+    console.error('API call failed:', error.message);
+    console.error('Status:', error.status);
+  } else if (error instanceof InitializationError) {
+    console.error('Bridge initialization failed:', error.message);
+  }
+}
+```
+
+## 🎛️ Configuration Examples
+
+### Basic Setup
+```typescript
+const bridge = new Bridge({
+  pyodide: await loadPyodide(),
+  baseUrl: '/api'
+});
+```
+
+### Advanced Setup with Persistence
+```typescript
+const bridge = new Bridge({
+  pyodide: await loadPyodide(),
+  persistence: true,
+  baseUrl: '/api',
+  timeout: 30000,
+  retries: 3,
+  debug: true,
+  packages: ['fastapi', 'sqlalchemy'],
+  onProgress: (progress) => {
+    console.log(`Installation progress: ${progress}%`);
+  }
+});
+```
+
+### React Integration
+```typescript
+import React, { useEffect, useState } from 'react';
+import { Bridge } from 'pyodide-bridge-ts';
+
+function App() {
+  const [bridge, setBridge] = useState<Bridge | null>(null);
+  const [users, setUsers] = useState([]);
+
+  useEffect(() => {
+    const initBridge = async () => {
+      const pyodide = await loadPyodide();
+      const bridgeInstance = new Bridge({ pyodide });
+      await bridgeInstance.init();
+      setBridge(bridgeInstance);
+    };
+    
+    initBridge();
+  }, []);
+
+  const fetchUsers = async () => {
+    if (!bridge) return;
+    
+    try {
+      const response = await bridge.call('/users');
+      setUsers(response.data);
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={fetchUsers} disabled={!bridge}>
+        Fetch Users
+      </button>
+      {/* Render users */}
+    </div>
+  );
+}
+```
+
+## 🔧 Development
+
+### Building
+```bash
+npm run build
+```
+
+### Testing
+```bash
+npm run test
+```
+
+### Type Checking
+```bash
+npm run typecheck
+```
+
+### Linting
+```bash
+npm run lint
+npm run lint:fix
+```
+
+## 🏗️ Architecture
+
+The bridge consists of several key components:
+
+- **Bridge**: Main orchestrator class
+- **PyodideEngine**: Low-level Pyodide management
+- **APIManager**: HTTP-like API interface
+- **EndpointExecutor**: Python code execution
+- **PackageManager**: Python package installation
+- **Persistence**: IndexedDB storage management
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+MIT - See [LICENSE](../../LICENSE) file for details.
+
+## 🔗 Related Packages
+
+- [`pyodide-bridge-py`](../pyodide-bridge-py/) - Python bridge for FastAPI integration
+- [`pyodide`](https://pyodide.org/) - Python runtime for WebAssembly
+
+---
+
+Built with ❤️ for the Python and TypeScript communities. 

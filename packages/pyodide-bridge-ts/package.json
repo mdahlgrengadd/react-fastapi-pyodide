@@ -1,0 +1,59 @@
+{
+  "name": "pyodide-bridge-ts",
+  "version": "0.1.0",
+  "description": "TypeScript bridge for Pyodide FastAPI integration",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix"
+  },
+  "keywords": [
+    "pyodide",
+    "fastapi",
+    "bridge",
+    "python",
+    "typescript",
+    "wasm"
+  ],
+  "author": "React FastAPI Pyodide",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-repo/react-fastapi-pyodide"
+  },
+  "bugs": {
+    "url": "https://github.com/your-repo/react-fastapi-pyodide/issues"
+  },
+  "homepage": "https://github.com/your-repo/react-fastapi-pyodide#readme",
+  "peerDependencies": {
+    "pyodide": ">=0.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

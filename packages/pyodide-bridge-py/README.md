@@ -1,0 +1,408 @@
+# pyodide-bridge-py
+
+A Python bridge package that provides utilities and optimizations for running FastAPI applications efficiently within Pyodide (WebAssembly Python) environments.
+
+## 🚀 Features
+
+- **⚡ FastAPI Optimization**: Custom middleware and routing optimizations for Pyodide
+- **🧠 Memory Management**: Efficient handling of Python objects in WASM environment  
+- **🚨 Error Handling**: Robust error propagation between Python and JavaScript
+- **🔒 Type Safety**: Full Pydantic integration for request/response validation
+- **📡 Streaming Support**: Real-time endpoint response streaming
+- **🌐 CORS Handling**: Built-in CORS management for browser environments
+- **📊 Performance Monitoring**: Built-in metrics and performance tracking
+
+## 📦 Installation
+
+```bash
+pip install pyodide-bridge-py
+```
+
+### Dependencies
+- `fastapi >= 0.100.0`
+- `pydantic >= 2.0`
+
+## 🎯 Quick Start
+
+```python
+from fastapi import FastAPI
+from pyodide_bridge import FastAPIBridge, optimize_for_pyodide
+
+# Create FastAPI app
+app = FastAPI(title="My Pyodide API")
+
+# Apply Pyodide optimizations
+optimize_for_pyodide(app)
+
+# Create bridge instance
+bridge = FastAPIBridge(app)
+
+# Register endpoints
+@app.get("/users")
+async def get_users():
+    return [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
+
+# Initialize for Pyodide
+if __name__ == "__main__":
+    bridge.setup_pyodide_environment()
+```
+
+## 📚 API Reference
+
+### FastAPIBridge Class
+
+The main class for optimizing FastAPI applications for Pyodide execution.
+
+#### Constructor
+
+```python
+FastAPIBridge(
+    app: FastAPI,
+    enable_cors: bool = True,
+    enable_metrics: bool = True,
+    optimize_memory: bool = True,
+    debug: bool = False
+)
+```
+
+**Parameters:**
+- `app`: FastAPI application instance
+- `enable_cors`: Enable CORS middleware for browser compatibility
+- `enable_metrics`: Enable performance metrics collection
+- `optimize_memory`: Apply memory optimizations for WASM
+- `debug`: Enable debug logging
+
+#### Methods
+
+##### `setup_pyodide_environment()`
+Configure the FastAPI application for optimal Pyodide execution.
+
+```python
+bridge = FastAPIBridge(app)
+bridge.setup_pyodide_environment()
+```
+
+##### `add_cors_middleware(origins: List[str] = None)`
+Add CORS middleware with browser-friendly defaults.
+
+```python
+bridge.add_cors_middleware(origins=["http://localhost:3000"])
+```
+
+##### `enable_streaming(max_chunk_size: int = 1024)`
+Enable response streaming for large datasets.
+
+```python
+bridge.enable_streaming(max_chunk_size=2048)
+```
+
+##### `get_metrics() -> Dict[str, Any]`
+Retrieve performance metrics.
+
+```python
+metrics = bridge.get_metrics()
+print(f"Total requests: {metrics['requests']}")
+print(f"Average response time: {metrics['avg_response_time']}ms")
+```
+
+### Decorators
+
+#### `@optimize_for_pyodide`
+Function decorator that applies Pyodide-specific optimizations.
+
+```python
+from pyodide_bridge import optimize_for_pyodide
+
+@optimize_for_pyodide
+def my_heavy_computation(data: List[dict]) -> dict:
+    # Memory-optimized computation
+    return process_data(data)
+```
+
+#### `@stream_response`
+Decorator for streaming large responses.
+
+```python
+from pyodide_bridge import stream_response
+
+@app.get("/large-dataset")
+@stream_response(chunk_size=1000)
+async def get_large_dataset():
+    for i in range(10000):
+        yield {"id": i, "data": f"item_{i}"}
+```
+
+### Utility Functions
+
+#### `optimize_for_pyodide(app: FastAPI)`
+Apply comprehensive Pyodide optimizations to a FastAPI app.
+
+```python
+from pyodide_bridge import optimize_for_pyodide
+
+app = FastAPI()
+optimize_for_pyodide(app)
+```
+
+#### `setup_memory_monitoring()`
+Enable memory usage monitoring and alerts.
+
+```python
+from pyodide_bridge import setup_memory_monitoring
+
+setup_memory_monitoring(
+    warning_threshold=50 * 1024 * 1024,  # 50MB
+    critical_threshold=100 * 1024 * 1024  # 100MB
+)
+```
+
+#### `create_pyodide_compatible_response(data: Any) -> Dict`
+Create responses optimized for JavaScript consumption.
+
+```python
+from pyodide_bridge import create_pyodide_compatible_response
+
+def my_endpoint():
+    data = {"users": get_users()}
+    return create_pyodide_compatible_response(data)
+```
+
+## 🎛️ Configuration Examples
+
+### Basic FastAPI App with Bridge
+
+```python
+from fastapi import FastAPI
+from pyodide_bridge import FastAPIBridge
+from pydantic import BaseModel
+
+app = FastAPI(title="Pyodide API")
+
+# Data models
+class User(BaseModel):
+    id: int
+    name: str
+    email: str
+
+class UserCreate(BaseModel):
+    name: str
+    email: str
+
+# Initialize bridge
+bridge = FastAPIBridge(
+    app=app,
+    enable_cors=True,
+    enable_metrics=True,
+    optimize_memory=True
+)
+
+# Sample data
+users_db = [
+    User(id=1, name="Alice", email="alice@example.com"),
+    User(id=2, name="Bob", email="bob@example.com")
+]
+
+# Endpoints
+@app.get("/users", response_model=List[User])
+async def get_users():
+    return users_db
+
+@app.post("/users", response_model=User)
+async def create_user(user: UserCreate):
+    new_user = User(
+        id=len(users_db) + 1,
+        name=user.name,
+        email=user.email
+    )
+    users_db.append(new_user)
+    return new_user
+
+@app.get("/users/{user_id}", response_model=User)
+async def get_user(user_id: int):
+    for user in users_db:
+        if user.id == user_id:
+            return user
+    raise HTTPException(status_code=404, detail="User not found")
+
+# Setup for Pyodide
+bridge.setup_pyodide_environment()
+```
+
+### Advanced Configuration with Streaming
+
+```python
+from fastapi import FastAPI
+from pyodide_bridge import FastAPIBridge, stream_response
+import asyncio
+
+app = FastAPI()
+bridge = FastAPIBridge(app, debug=True)
+
+@app.get("/stream-data")
+@stream_response(chunk_size=100)
+async def stream_large_dataset():
+    """Stream large dataset in chunks"""
+    for batch in range(50):
+        # Simulate data processing
+        await asyncio.sleep(0.1)
+        
+        batch_data = [
+            {"id": i + batch * 100, "value": f"data_{i}"}
+            for i in range(100)
+        ]
+        
+        yield {"batch": batch, "data": batch_data}
+
+bridge.setup_pyodide_environment()
+bridge.enable_streaming(max_chunk_size=2048)
+```
+
+### Memory Optimization Example
+
+```python
+from fastapi import FastAPI
+from pyodide_bridge import (
+    FastAPIBridge, 
+    optimize_for_pyodide,
+    setup_memory_monitoring
+)
+
+app = FastAPI()
+
+# Enable memory monitoring
+setup_memory_monitoring(
+    warning_threshold=30 * 1024 * 1024,  # 30MB warning
+    critical_threshold=50 * 1024 * 1024,  # 50MB critical
+    cleanup_on_warning=True
+)
+
+@optimize_for_pyodide
+def process_large_data(data: list) -> dict:
+    """Memory-optimized data processing"""
+    # Process data in chunks to minimize memory usage
+    results = []
+    chunk_size = 1000
+    
+    for i in range(0, len(data), chunk_size):
+        chunk = data[i:i + chunk_size]
+        processed_chunk = [item * 2 for item in chunk]
+        results.extend(processed_chunk)
+        
+        # Explicit cleanup for large datasets
+        del chunk, processed_chunk
+    
+    return {"processed": len(results), "sample": results[:10]}
+
+@app.post("/process")
+async def process_endpoint(data: dict):
+    return process_large_data(data.get("items", []))
+
+# Setup bridge with memory optimizations
+bridge = FastAPIBridge(app, optimize_memory=True)
+bridge.setup_pyodide_environment()
+```
+
+## 🔧 Development
+
+### Building
+```bash
+python -m build
+```
+
+### Testing
+```bash
+pytest
+```
+
+### Type Checking
+```bash
+mypy src/
+```
+
+### Code Formatting
+```bash
+black src/
+isort src/
+```
+
+## 🏗️ Architecture
+
+The bridge package consists of several key modules:
+
+- **`fastapi_bridge.py`**: Main bridge implementation and FastAPI optimizations
+- **`utils.py`**: Utility functions for memory management and Pyodide compatibility
+- **`__init__.py`**: Package exports and convenience functions
+
+### Key Components
+
+1. **Memory Manager**: Handles WASM memory constraints and garbage collection
+2. **Response Optimizer**: Converts Python objects to JavaScript-friendly formats
+3. **Streaming Handler**: Manages chunked response streaming
+4. **CORS Manager**: Provides browser-compatible CORS handling
+5. **Metrics Collector**: Tracks performance and resource usage
+
+## 🔍 Performance Tips
+
+### Memory Optimization
+```python
+# ✅ Good: Process data in chunks
+def process_large_dataset(data):
+    for chunk in chunks(data, size=1000):
+        yield process_chunk(chunk)
+
+# ❌ Avoid: Loading entire dataset into memory
+def process_large_dataset(data):
+    return [process_item(item) for item in data]
+```
+
+### Response Optimization
+```python
+# ✅ Good: Use streaming for large responses
+@stream_response()
+async def get_large_data():
+    for item in large_dataset:
+        yield item
+
+# ❌ Avoid: Returning large objects directly
+async def get_large_data():
+    return list(large_dataset)  # Memory intensive
+```
+
+### Error Handling
+```python
+# ✅ Good: Pyodide-compatible error responses
+from pyodide_bridge import create_pyodide_compatible_response
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request, exc):
+    return create_pyodide_compatible_response({
+        "error": "validation_error",
+        "message": str(exc),
+        "status_code": 400
+    })
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes and add tests
+4. Run the test suite (`pytest`)
+5. Format your code (`black . && isort .`)
+6. Commit your changes (`git commit -m 'Add some amazing feature'`)
+7. Push to the branch (`git push origin feature/amazing-feature`)
+8. Open a Pull Request
+
+## 📄 License
+
+MIT - See [LICENSE](../../LICENSE) file for details.
+
+## 🔗 Related Packages
+
+- [`pyodide-bridge-ts`](../pyodide-bridge-ts/) - TypeScript bridge for frontend integration
+- [`fastapi`](https://fastapi.tiangolo.com/) - Modern Python web framework
+- [`pyodide`](https://pyodide.org/) - Python runtime for WebAssembly
+
+---
+
+Built with ❤️ for the Python and Pyodide communities. 
