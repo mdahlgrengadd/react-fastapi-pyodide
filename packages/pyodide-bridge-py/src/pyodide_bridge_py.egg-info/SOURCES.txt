@@ -3,8 +3,12 @@ pyproject.toml
 src/pyodide_bridge/__init__.py
 src/pyodide_bridge/fastapi_bridge.py
 src/pyodide_bridge/utils.py
+src/pyodide_bridge/cli/__init__.py
+src/pyodide_bridge/cli/main.py
+src/pyodide_bridge/cli/operation_id_manager.py
 src/pyodide_bridge_py.egg-info/PKG-INFO
 src/pyodide_bridge_py.egg-info/SOURCES.txt
 src/pyodide_bridge_py.egg-info/dependency_links.txt
+src/pyodide_bridge_py.egg-info/entry_points.txt
 src/pyodide_bridge_py.egg-info/requires.txt
 src/pyodide_bridge_py.egg-info/top_level.txt
