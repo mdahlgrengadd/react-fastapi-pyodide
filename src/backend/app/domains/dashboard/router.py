@@ -167,3 +167,118 @@ async def get_analytics(
         "environment": ENVIRONMENT,
         "generated_at": datetime.utcnow()
     }
+
+
+@router.get("/dashboard/async-stats",
+            summary="Async dashboard statistics",
+            description="Demonstrates async database queries with real-time stats",
+            tags=["dashboard"],
+            operation_id="get_async_dashboard_stats")
+async def get_async_dashboard_stats(
+    db: Union[Session, AsyncSession] = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Async endpoint demonstrating concurrent database queries."""
+    import asyncio
+    from datetime import datetime, timedelta
+
+    start_time = datetime.utcnow()
+
+    # Define async query functions
+    async def get_user_count():
+        """Get total user count with simulated delay."""
+        await asyncio.sleep(0.05)  # Simulate some processing time
+        if isinstance(db, AsyncSession):
+            result = await db.execute(select(func.count(User.id)))
+            return result.scalar() or 0
+        else:
+            return db.query(User).count()
+
+    async def get_recent_activity():
+        """Get recent activity with simulated delay."""
+        await asyncio.sleep(0.08)  # Simulate processing time
+        cutoff_time = datetime.utcnow() - timedelta(days=7)
+
+        if isinstance(db, AsyncSession):
+            recent_users_result = await db.execute(
+                select(func.count(User.id)).where(
+                    User.created_at >= cutoff_time)
+            )
+            recent_posts_result = await db.execute(
+                select(func.count(Post.id)).where(
+                    Post.created_at >= cutoff_time)
+            )
+            return {
+                "recent_users": recent_users_result.scalar() or 0,
+                "recent_posts": recent_posts_result.scalar() or 0
+            }
+        else:
+            recent_users = db.query(User).filter(
+                User.created_at >= cutoff_time).count()
+            recent_posts = db.query(Post).filter(
+                Post.created_at >= cutoff_time).count()
+            return {
+                "recent_users": recent_users,
+                "recent_posts": recent_posts
+            }
+
+    async def get_engagement_stats():
+        """Get engagement statistics with simulated delay."""
+        await asyncio.sleep(0.06)  # Simulate processing time
+
+        if isinstance(db, AsyncSession):
+            published_result = await db.execute(
+                select(func.count(Post.id)).where(Post.published == True)
+            )
+            total_result = await db.execute(select(func.count(Post.id)))
+            return {
+                "published_posts": published_result.scalar() or 0,
+                "total_posts": total_result.scalar() or 0
+            }
+        else:
+            published = db.query(Post).filter(Post.published == True).count()
+            total = db.query(Post).count()
+            return {
+                "published_posts": published,
+                "total_posts": total
+            }
+
+    # Execute all queries concurrently
+    user_count_task = asyncio.create_task(get_user_count())
+    activity_task = asyncio.create_task(get_recent_activity())
+    engagement_task = asyncio.create_task(get_engagement_stats())
+
+    # Wait for all tasks to complete
+    user_count, recent_activity, engagement_stats = await asyncio.gather(
+        user_count_task, activity_task, engagement_task
+    )
+
+    end_time = datetime.utcnow()
+    total_duration = (end_time - start_time).total_seconds()
+
+    # Calculate engagement rate
+    engagement_rate = 0.0
+    if engagement_stats["total_posts"] > 0:
+        engagement_rate = (
+            engagement_stats["published_posts"] / engagement_stats["total_posts"]) * 100
+
+    return {
+        "message": "Async dashboard statistics generated successfully",
+        "user": current_user,
+        "async_stats": {
+            "total_users": user_count,
+            "recent_activity": recent_activity,
+            "engagement": {
+                **engagement_stats,
+                "engagement_rate_percent": round(engagement_rate, 1)
+            }
+        },
+        "performance": {
+            "query_duration_seconds": total_duration,
+            "concurrent_queries": 3,
+            "start_time": start_time,
+            "end_time": end_time
+        },
+        "environment": ENVIRONMENT,
+        "note": "This endpoint demonstrates concurrent async database queries"
+    }

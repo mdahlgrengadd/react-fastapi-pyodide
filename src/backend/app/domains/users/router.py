@@ -113,3 +113,82 @@ async def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     return {"message": "User deleted successfully"}
+
+
+@router.get("/users/async/profile-summary",
+            summary="Async user profile summary",
+            description="Generates a comprehensive profile summary with async processing",
+            tags=["users"],
+            operation_id="get_async_profile_summary")
+async def get_async_profile_summary(
+    user_id: int = Query(..., description="User ID to generate summary for"),
+    db: Union[Session, AsyncSession] = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate an async user profile summary with processing simulation."""
+    import asyncio
+    from datetime import datetime
+
+    start_time = datetime.utcnow()
+    service = UserService(db)
+
+    # Define async processing functions
+    async def get_user_info():
+        """Get basic user information."""
+        await asyncio.sleep(0.05)  # Simulate processing time
+        user = await service.get_user(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return user
+
+    async def get_user_posts():
+        """Get user's posts with processing simulation."""
+        await asyncio.sleep(0.08)  # Simulate data processing
+        posts = await service.get_posts_by_user(user_id) if hasattr(service, 'get_posts_by_user') else []
+        return posts
+
+    async def generate_insights():
+        """Generate user insights with simulated AI processing."""
+        await asyncio.sleep(0.12)  # Simulate AI processing time
+        return {
+            "activity_level": "high",
+            "engagement_score": 85,
+            "content_quality": "excellent",
+            "generated_at": datetime.utcnow()
+        }
+
+    # Execute all operations concurrently
+    user_info_task = asyncio.create_task(get_user_info())
+    user_posts_task = asyncio.create_task(get_user_posts())
+    insights_task = asyncio.create_task(generate_insights())
+
+    try:
+        user_info, user_posts, insights = await asyncio.gather(
+            user_info_task, user_posts_task, insights_task
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error generating profile summary: {str(e)}")
+
+    end_time = datetime.utcnow()
+    processing_time = (end_time - start_time).total_seconds()
+
+    return {
+        "message": "Async profile summary generated successfully",
+        "requested_by": current_user,
+        "profile_summary": {
+            "user": user_info,
+            "posts_count": len(user_posts) if user_posts else 0,
+            "insights": insights,
+            "summary_text": f"User {user_info.name if hasattr(user_info, 'name') else 'Unknown'} is an active member with {len(user_posts) if user_posts else 0} posts."
+        },
+        "processing_info": {
+            "async_operations": 3,
+            "processing_time_seconds": processing_time,
+            "start_time": start_time,
+            "end_time": end_time
+        },
+        "note": "This endpoint demonstrates async user data processing and concurrent operations"
+    }
