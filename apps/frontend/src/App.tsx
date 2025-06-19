@@ -77,9 +77,21 @@ function App() {
         let finalEndpoints = loadedEndpoints;
         if (finalEndpoints.length === 0) {
           try {
-            const endpointsStr = pyodide.runPython(
-              `import json, builtins; json.dumps(get_bridge().get_endpoints())`
-            );
+            // Try the safer standalone function first
+            const endpointsStr = pyodide.runPython(`
+import json
+result = "[]"
+if 'get_endpoints_safe' in globals():
+    try:
+        result = json.dumps(get_endpoints_safe())
+    except Exception as e:
+        print(f"Error with standalone function: {e}")
+        # Fallback to bridge method
+        result = json.dumps(get_bridge().get_endpoints())
+else:
+    result = json.dumps(get_bridge().get_endpoints())
+result
+            `);
             finalEndpoints = JSON.parse(
               endpointsStr as string
             ) as ApiEndpoint[];

@@ -13,7 +13,11 @@ import asyncio
 import inspect
 import logging
 import traceback
+import os
+import sys
+import warnings
 from datetime import datetime
+from types import ModuleType
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
 try:
@@ -33,6 +37,359 @@ logger = logging.getLogger(__name__)
 
 # Global registry for routes (survives app instance reloads)
 _global_route_registry: Dict[str, Dict[str, Any]] = {}
+
+# Debug configuration
+DEBUG_LEVEL = int(os.getenv("PYODIDE_BRIDGE_DEBUG", "0"))
+
+
+def log(*args: Any, **kwargs: Any) -> None:
+    """Log debug messages if DEBUG_LEVEL > 0."""
+    if DEBUG_LEVEL > 0:
+        print("[PYODIDE_BRIDGE]", *args, **kwargs)
+
+
+def format_error(e: Exception, include_traceback: bool = False) -> Dict[str, Any]:
+    """Format error based on debug level with size limits."""
+    error_data = {
+        "error": type(e).__name__,
+        "detail": str(e)
+    }
+
+    if include_traceback or DEBUG_LEVEL >= 1:
+        # Pre-clip stack depth before formatting to avoid WASM string limits
+        tb_lines = traceback.format_exception(
+            type(e), e, e.__traceback__, limit=20)
+        tb_str = ''.join(tb_lines)
+        # Traceback size guard: truncate to 2 KiB safely to avoid UTF-8 issues
+        if len(tb_str.encode('utf-8')) > 2048:
+            # Safe UTF-8 truncation to avoid breaking multibyte characters
+            truncated = tb_str.encode('utf-8')[:2048].decode('utf-8', 'ignore')
+            error_data["traceback"] = truncated + "..."
+            error_data["traceback_truncated"] = True
+        else:
+            error_data["traceback"] = tb_str
+            error_data["traceback_truncated"] = False
+
+    return error_data
+
+
+# ---------------------------------------------------------------------------
+# Enhanced Depends shim with async support
+# ---------------------------------------------------------------------------
+
+class _DependsShim:
+    __slots__ = ("dependency",)
+
+    def __init__(self, dependency: Callable[..., Any]):
+        self.dependency = dependency
+
+    async def resolve(self) -> Any:
+        """Resolve dependency, handling both sync and async functions."""
+        if inspect.iscoroutinefunction(self.dependency):
+            return await self.dependency()
+        else:
+            result = self.dependency()
+            # Handle generators
+            import types
+            if isinstance(result, types.GeneratorType) or hasattr(result, "__next__"):
+                try:
+                    return next(result)
+                except StopIteration as exc:
+                    return exc.value
+            return result
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return self.dependency(*args, **kwargs)
+
+    def __repr__(self) -> str:
+        return f"Depends({self.dependency.__name__})"
+
+
+class _DependsMeta(type):
+    def __call__(cls, dependency: Callable[..., Any], **_kwargs: Any):
+        return _DependsShim(dependency)
+
+    def __instancecheck__(cls, instance: Any) -> bool:
+        return isinstance(instance, _DependsShim)
+
+
+class Depends(metaclass=_DependsMeta):
+    """Public alias so user code can `from fastapi import Depends`."""
+
+
+# ---------------------------------------------------------------------------
+# Event-loop helper – simplified for Pyodide ≥ 0.27.7
+# ---------------------------------------------------------------------------
+
+async def _run_with_fallback(coro):
+    """Run coroutine with a fallback for non-Pyodide environments.
+
+    * In Pyodide ≥ 0.25 ``enableRunUntilComplete`` is on by default, so we can
+      just ``await`` the coroutine.
+    * In ordinary CPython we fall back to ``asyncio.run`` when called from a
+      synchronous context.
+    """
+    if is_pyodide_environment():
+        # Simple path – Pyodide keeps the loop alive for us
+        return await coro
+
+    # Non-Pyodide: mimic old behaviour
+    try:
+        asyncio.get_running_loop()
+        return await coro
+    except RuntimeError:
+        return asyncio.run(coro)
+
+
+# ---------------------------------------------------------------------------
+# Enhanced Uvicorn stub with UserWarning and help URL
+# ---------------------------------------------------------------------------
+
+class _UvicornStub(ModuleType):
+    def run(self, app: Any, host: str = "127.0.0.1", port: int = 8000, **kwargs):
+        """Uvicorn stub that warns about Pyodide limitations."""
+        warnings.warn(
+            "Running inside Pyodide: 'uvicorn.run' is a no-op. "
+            "See: https://fastapi.tiangolo.com/deployment/concepts/",
+            UserWarning,
+            stacklevel=2
+        )
+        log(f"Uvicorn stub: would run {getattr(app, 'title', 'FastAPI')} on {host}:{port}")
+
+
+# Install uvicorn stub only in Pyodide environments
+if is_pyodide_environment():
+    sys.modules["uvicorn"] = _UvicornStub("uvicorn")
+
+
+# ---------------------------------------------------------------------------
+# APIRouter patching to capture routes from sub-routers
+# ---------------------------------------------------------------------------
+
+def _patch_api_router():
+    """Patch APIRouter class to intercept route registrations."""
+    try:
+        from fastapi import APIRouter
+
+        # Store original methods
+        original_get = APIRouter.get
+        original_post = APIRouter.post
+        original_put = APIRouter.put
+        original_patch = APIRouter.patch
+        original_delete = APIRouter.delete
+
+        def make_router_wrapper(orig_method: callable, method: str):
+            def wrapper(self, path: str, **kwargs):
+                def inner(func: callable):
+                    log(f"Registering {method} {path} → {func.__name__} (router)")
+
+                    # Register in our global registry with full path including prefix
+                    operation_id = kwargs.get("operation_id") or func.__name__
+
+                    # Try to get the API prefix from settings
+                    full_path = path
+                    try:
+                        from app.core.settings import settings
+                        full_path = settings.api_v1_prefix + path
+                    except Exception:
+                        # Fallback to default prefix if settings unavailable
+                        full_path = "/api/v1" + path
+
+                    info = {
+                        "operation_id": operation_id,
+                        "path": full_path,
+                        "method": method,
+                        "handler": func,
+                        "summary": kwargs.get("summary") or func.__doc__ or f"{method} {path}",
+                        "tags": kwargs.get("tags", []),
+                        "response_model": kwargs.get("response_model"),
+                        "request_model": None,
+                    }
+
+                    _global_route_registry[operation_id] = info
+                    log(
+                        f"Registered router endpoint: {operation_id} at {full_path}")
+
+                    # Call original method
+                    return orig_method(self, path, **kwargs)(func)
+                return inner
+            return wrapper
+
+        # Patch router methods
+        APIRouter.get = make_router_wrapper(original_get, "GET")
+        APIRouter.post = make_router_wrapper(original_post, "POST")
+        APIRouter.put = make_router_wrapper(original_put, "PUT")
+        APIRouter.patch = make_router_wrapper(original_patch, "PATCH")
+        APIRouter.delete = make_router_wrapper(original_delete, "DELETE")
+
+        log("✅ Router class patching applied successfully")
+
+    except Exception as e:
+        log(f"❌ Router patching failed: {e}")
+
+
+# Apply router patching
+_patch_api_router()
+
+
+# ---------------------------------------------------------------------------
+# Standalone execute_endpoint function (critical for bridge compatibility)
+# ---------------------------------------------------------------------------
+
+async def execute_endpoint(
+    operation_id: str,
+    path_params: Optional[Dict[str, Any]] = None,
+    query_params: Optional[Dict[str, Any]] = None,
+    body: Any = None
+) -> Dict[str, Any]:
+    """Execute endpoint with full async support and event-loop fallback."""
+    path_params = path_params or {}
+    query_params = query_params or {}
+
+    # Handle Pyodide JsProxy conversion
+    try:
+        from pyodide.ffi import JsProxy, to_py
+        if isinstance(body, JsProxy):
+            body = body.to_py() if hasattr(body, "to_py") else to_py(body)
+    except (ModuleNotFoundError, ImportError):
+        if hasattr(body, "to_py"):
+            try:
+                body = body.to_py()
+            except Exception:
+                pass
+
+    # Find handler in registry
+    route_info = _global_route_registry.get(operation_id)
+    if not route_info:
+        available_ops = list(_global_route_registry.keys())
+        error_response = {"detail": f"Handler for {operation_id} not found"}
+        if DEBUG_LEVEL >= 1:
+            error_response["available_endpoints"] = available_ops
+        return {"content": error_response, "status_code": 404}
+
+    handler = route_info["handler"]
+    if not callable(handler):
+        return {
+            "content": {"detail": f"Handler for {operation_id} is not callable"},
+            "status_code": 500
+        }
+
+    try:
+        # Prepare arguments
+        sig = inspect.signature(handler)
+        kwargs = await _prepare_handler_kwargs(sig, path_params, query_params, body)
+
+        # Execute handler with event-loop fallback
+        if inspect.iscoroutinefunction(handler):
+            try:
+                # Try to use existing event loop - direct await to avoid double-await
+                asyncio.get_running_loop()
+                result = await handler(**kwargs)
+            except RuntimeError:
+                # No current event loop - fallback to asyncio.run
+                result = await _run_with_fallback(handler(**kwargs))
+        else:
+            result = handler(**kwargs)
+
+        return {
+            "content": convert_to_serializable(result),
+            "status_code": 200
+        }
+
+    except HTTPException as e:
+        return {
+            "content": format_error(e, DEBUG_LEVEL >= 1),
+            "status_code": e.status_code
+        }
+    except Exception as e:
+        log(f"Endpoint execution error: {e}")
+        if DEBUG_LEVEL >= 1:
+            traceback.print_exc()
+        return {
+            "content": format_error(e, DEBUG_LEVEL >= 1),
+            "status_code": 500
+        }
+
+
+async def _prepare_handler_kwargs(
+    sig: inspect.Signature,
+    path_params: Dict[str, Any],
+    query_params: Dict[str, Any],
+    body: Any
+) -> Dict[str, Any]:
+    """Prepare handler keyword arguments with type conversion."""
+    kwargs: Dict[str, Any] = {}
+
+    def _convert_param(val: Any, annotation: Any) -> Any:
+        """Convert parameter value to expected type."""
+        try:
+            if annotation in (int, float, bool, str):
+                return annotation(val)
+            return val
+        except Exception:
+            return val
+
+    for name, param in sig.parameters.items():
+        if name in path_params:
+            kwargs[name] = _convert_param(path_params[name], param.annotation)
+        elif name in query_params:
+            kwargs[name] = _convert_param(query_params[name], param.annotation)
+        elif isinstance(param.default, _DependsShim):
+            kwargs[name] = await param.default.resolve()
+        elif hasattr(param.default, "dependency"):
+            # Handle FastAPI Depends
+            dep = param.default.dependency
+            if inspect.iscoroutinefunction(dep):
+                kwargs[name] = await dep()
+            else:
+                result = dep()
+                import types
+                if isinstance(result, types.GeneratorType) or hasattr(result, "__next__"):
+                    try:
+                        kwargs[name] = next(result)
+                    except StopIteration as exc:
+                        kwargs[name] = exc.value
+                else:
+                    kwargs[name] = result
+        elif param.default is not inspect.Parameter.empty:
+            # Handle FastAPI Query, Path, etc.
+            default_val = param.default
+
+            # Check if it's a FastAPI parameter (Query, Path, etc) - check for 'default' attribute safely
+            try:
+                if hasattr(default_val, 'default') and not callable(default_val):
+                    kwargs[name] = default_val.default
+                # Check if it's a Depends object we missed
+                elif isinstance(default_val, _DependsShim):
+                    kwargs[name] = await default_val.resolve()
+                elif hasattr(default_val, "dependency"):
+                    # Handle FastAPI Depends that we might have missed
+                    dep = default_val.dependency
+                    if inspect.iscoroutinefunction(dep):
+                        kwargs[name] = await dep()
+                    else:
+                        result = dep()
+                        import types
+                        if isinstance(result, types.GeneratorType) or hasattr(result, "__next__"):
+                            try:
+                                kwargs[name] = next(result)
+                            except StopIteration as exc:
+                                kwargs[name] = exc.value
+                        else:
+                            kwargs[name] = result
+                else:
+                    kwargs[name] = default_val
+            except Exception as e:
+                log(f"Error processing param {name}: {e}")
+                kwargs[name] = None
+        elif body is not None and param.annotation != inspect._empty:
+            # Try to instantiate Pydantic model
+            try:
+                kwargs[name] = param.annotation(**body)
+            except Exception:
+                kwargs[name] = body
+
+    return kwargs
 
 
 class FastAPI(OriginalFastAPI if HAS_FASTAPI else object):
@@ -456,15 +813,33 @@ class FastAPI(OriginalFastAPI if HAS_FASTAPI else object):
 
         for operation_id, route_info in _global_route_registry.items():
             if operation_id not in excluded_operations:
-                endpoints.append({
+                # Safely serialize each field
+                endpoint_data = {
                     "operationId": operation_id,
                     "path": route_info["path"],
                     "method": route_info["method"],
                     "summary": route_info["summary"],
-                    "tags": route_info["tags"],
-                    "responseModel": route_info.get("response_model"),
-                    "requestModel": route_info.get("request_model"),
-                })
+                    "tags": route_info.get("tags", []),
+                }
+
+                # Safely handle response_model
+                response_model = route_info.get("response_model")
+                if response_model:
+                    endpoint_data["responseModel"] = convert_to_serializable(
+                        response_model)
+                else:
+                    endpoint_data["responseModel"] = None
+
+                # Safely handle request_model
+                request_model = route_info.get("request_model")
+                if request_model:
+                    endpoint_data["requestModel"] = convert_to_serializable(
+                        request_model)
+                else:
+                    endpoint_data["requestModel"] = None
+
+                endpoints.append(endpoint_data)
+
         return endpoints
 
     def get_openapi_schema(self) -> Dict[str, Any]:
@@ -486,6 +861,102 @@ class FastAPI(OriginalFastAPI if HAS_FASTAPI else object):
                     "version": getattr(self, 'version', '0.1.0')
                 },                "paths": {}
             }
+
+
+# ---------------------------------------------------------------------------
+# Standalone functions for direct JavaScript access
+# ---------------------------------------------------------------------------
+
+def get_endpoints() -> List[Dict[str, Any]]:
+    """Get list of registered endpoints (standalone function for JS access)."""
+    endpoints = []
+    # Filter out bridge meta-endpoints that shouldn't be directly callable from UI
+    excluded_operations = {
+        "get_bridge_endpoints",
+        "get_bridge_registry",
+        "invoke_bridge_endpoint"
+    }
+
+    for operation_id, route_info in _global_route_registry.items():
+        if operation_id not in excluded_operations:
+            # Use only basic, safe data types
+            endpoint_data = {
+                "operationId": str(operation_id),
+                "path": str(route_info.get("path", "")),
+                "method": str(route_info.get("method", "")),
+                "summary": str(route_info.get("summary", "")),
+                # Ensure it's a plain list
+                "tags": list(route_info.get("tags", [])),
+                "responseModel": None,  # Skip complex models for now
+                "requestModel": None,   # Skip complex models for now
+            }
+
+            # Safely handle handler (convert to name for serialization)
+            handler = route_info.get("handler")
+            if callable(handler):
+                endpoint_data["handler"] = str(handler.__name__)
+            else:
+                endpoint_data["handler"] = "unknown"
+
+            endpoints.append(endpoint_data)
+
+    return endpoints
+
+
+def get_endpoints_ultra_safe() -> List[Dict[str, Any]]:
+    """Ultra-safe endpoint extraction that avoids all complex objects."""
+    try:
+        endpoints = []
+        registry_keys = list(_global_route_registry.keys())
+
+        for operation_id in registry_keys:
+            if operation_id in {"get_bridge_endpoints", "get_bridge_registry", "invoke_bridge_endpoint"}:
+                continue
+
+            route_info = _global_route_registry.get(operation_id, {})
+
+            # Extract only string/basic values, no complex objects
+            endpoint = {
+                "operationId": str(operation_id),
+                "path": str(route_info.get("path", "/")),
+                "method": str(route_info.get("method", "GET")),
+                "summary": str(route_info.get("summary", "")),
+                "tags": [],  # Empty list to avoid any serialization issues
+                "handler": "unknown"
+            }
+
+            # Try to get handler name safely
+            try:
+                handler = route_info.get("handler")
+                if handler and hasattr(handler, "__name__"):
+                    endpoint["handler"] = str(handler.__name__)
+            except Exception:
+                pass  # Keep default "unknown"
+
+            endpoints.append(endpoint)
+
+        return endpoints
+    except Exception as e:
+        log(f"Error in ultra-safe endpoint extraction: {e}")
+        return []
+
+
+def get_openapi_schema() -> Dict[str, Any]:
+    """Generate OpenAPI schema (standalone function for JS access)."""
+    try:
+        from fastapi.openapi.utils import get_openapi
+        # This would need a FastAPI app instance - simplified for compatibility
+        return {
+            "openapi": "3.0.2",
+            "info": {"title": "FastAPI", "version": "0.1.0"},
+            "paths": {}
+        }
+    except ImportError:
+        return {
+            "openapi": "3.0.2",
+            "info": {"title": "FastAPI", "version": "0.1.0"},
+            "paths": {}
+        }
 
 
 # Backwards compatibility alias

@@ -317,6 +317,11 @@ if backend_root not in sys.path:
 
 # Now try to import pyodide_bridge and set up proper bridge functionality
 try:
+    # Add the pyodide_bridge package to the path
+    import sys
+    if "/backend" not in sys.path:
+        sys.path.insert(0, "/backend")
+    
     from pyodide_bridge import FastAPI
     print("Successfully imported pyodide_bridge.FastAPI")
     
@@ -333,6 +338,36 @@ try:
     
     # Set as the bridge instance
     set_bridge(app)
+    
+    # Also make standalone functions available globally for safer endpoint extraction
+    try:
+        print("Attempting to import get_endpoints_ultra_safe from pyodide_bridge...")
+        from pyodide_bridge import get_endpoints_ultra_safe as _get_endpoints_safe
+        globals()['get_endpoints_safe'] = _get_endpoints_safe
+        print("Made standalone get_endpoints function available")
+        
+        # Test the function to make sure it works
+        try:
+            test_endpoints = _get_endpoints_safe()
+            print(f"Standalone function works, found {len(test_endpoints)} endpoints")
+        except Exception as test_e:
+            print(f"Standalone function test failed: {test_e}")
+            import traceback
+            traceback.print_exc()
+            
+    except ImportError as ie:
+        print(f"Warning: Could not import standalone get_endpoints: {ie}")
+        import traceback
+        traceback.print_exc()
+        
+        # Try alternative import approach
+        try:
+            print("Trying alternative import...")
+            import pyodide_bridge.fastapi_bridge as fb
+            globals()['get_endpoints_safe'] = fb.get_endpoints_ultra_safe
+            print("Alternative import successful - using ultra_safe version")
+        except Exception as alt_e:
+            print(f"Alternative import also failed: {alt_e}")
     
     print(f"Loaded FastAPI app from {backend_root}")
 except Exception as e:
@@ -352,13 +387,42 @@ except Exception as e:
     if (!this.pyodide) return [];
 
     try {
+      // First try the standalone function which should be safer for serialization
       const result = this.pyodide.runPython(`
 import json
-bridge = get_bridge()
 result = "[]"
-if hasattr(bridge, 'get_endpoints'):
-    endpoints = bridge.get_endpoints()
-    result = json.dumps(endpoints)
+
+print("=== DEBUG: Extracting endpoints ===")
+print(f"get_endpoints_safe in globals: {'get_endpoints_safe' in globals()}")
+
+# Try standalone function first (safer serialization)
+if 'get_endpoints_safe' in globals():
+    print("Using standalone get_endpoints_safe function")
+    try:
+        endpoints = get_endpoints_safe()
+        print(f"Standalone function returned {len(endpoints)} endpoints")
+        result = json.dumps(endpoints)
+        print("Successfully serialized endpoints with standalone function")
+    except Exception as e:
+        print(f"Error with standalone get_endpoints: {e}")
+        import traceback
+        traceback.print_exc()
+        # Fallback to bridge method
+        print("Falling back to bridge method")
+        bridge = get_bridge()
+        if hasattr(bridge, 'get_endpoints'):
+            endpoints = bridge.get_endpoints()
+            result = json.dumps(endpoints)
+else:
+    print("Standalone function not available, using bridge method")
+    # Fallback to bridge method
+    bridge = get_bridge()
+    if hasattr(bridge, 'get_endpoints'):
+        endpoints = bridge.get_endpoints()
+        print(f"Bridge method returned {len(endpoints)} endpoints")
+        result = json.dumps(endpoints)
+
+print("=== END DEBUG ===")
 result
       `);
 

@@ -76,7 +76,8 @@ def convert_to_serializable(obj: Any, _seen: Optional[Set[int]] = None) -> Any:
     Convert any object to a JSON-serializable format.
 
     Handles SQLAlchemy models, Pydantic models, datetime objects,
-    and complex nested structures while preventing circular references.
+    FastAPI parameter objects, and complex nested structures while 
+    preventing circular references.
 
     Args:
         obj: The object to serialize
@@ -108,6 +109,24 @@ def convert_to_serializable(obj: Any, _seen: Optional[Set[int]] = None) -> Any:
         # Handle Decimal
         if isinstance(obj, Decimal):
             return float(obj)
+
+        # Handle FastAPI parameter objects (Query, Path, Body, etc.)
+        if hasattr(obj, '__class__') and obj.__class__.__name__ in (
+            'Query', 'Path', 'Body', 'Form', 'File', 'Header', 'Cookie', 'Depends'
+        ):
+            # Extract the default value if available
+            if hasattr(obj, 'default'):
+                return convert_to_serializable(obj.default, _seen)
+            return f"<FastAPI {obj.__class__.__name__}>"
+
+        # Handle DefaultPlaceholder and similar FastAPI internal objects
+        if hasattr(obj, '__class__') and (
+            'Default' in obj.__class__.__name__ or
+            'Placeholder' in obj.__class__.__name__ or
+            obj.__class__.__module__ and obj.__class__.__module__.startswith(
+                'fastapi')
+        ):
+            return f"<{obj.__class__.__name__}>"
 
         # Handle collections
         if isinstance(obj, dict):

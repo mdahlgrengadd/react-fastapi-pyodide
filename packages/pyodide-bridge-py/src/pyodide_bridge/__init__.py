@@ -20,9 +20,12 @@ Usage:
     from pyodide_bridge import OriginalFastAPI
 """
 
-from .fastapi_bridge import FastAPI, FastAPIBridge, OriginalFastAPI
+from .fastapi_bridge import FastAPI, FastAPIBridge, OriginalFastAPI, execute_endpoint, Depends, get_endpoints, get_openapi_schema, get_endpoints_ultra_safe
 from .utils import is_pyodide_environment, convert_to_serializable
+from .monkey_patch import enable as enable_monkey_patch
 
 __version__ = "0.1.0"
 __all__ = ["FastAPI", "FastAPIBridge", "OriginalFastAPI",
-           "is_pyodide_environment", "convert_to_serializable"]
+           "is_pyodide_environment", "convert_to_serializable",
+           "enable_monkey_patch", "execute_endpoint", "Depends",
+           "get_endpoints", "get_openapi_schema", "get_endpoints_ultra_safe"]
