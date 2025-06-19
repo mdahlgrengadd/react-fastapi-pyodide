@@ -6,7 +6,6 @@ seamless Pyodide integration while maintaining full FastAPI compatibility.
 """
 
 import asyncio
-from contextlib import asynccontextmanager
 from typing import Dict, Any
 
 # Use the enhanced FastAPI class with Pyodide bridge functionality
@@ -26,30 +25,6 @@ setup_logging(debug=settings.debug)
 logger = get_logger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """
-    Application lifespan events.
-
-    This handles initialization and cleanup for the FastAPI application.
-    """
-    # Startup
-    logger.info("Starting FastAPI application...")
-
-    # Initialize database
-    if HAS_ASYNC_SQLALCHEMY and not IS_PYODIDE:
-        await init_db()
-    else:
-        init_db_sync()
-
-    logger.info("Application startup complete")
-
-    yield
-
-    # Shutdown
-    logger.info("Application shutdown complete")
-
-
 # Create FastAPI app instance with Pyodide bridge functionality
 app = FastAPI(
     title=settings.app_name,
@@ -57,18 +32,17 @@ app = FastAPI(
     description=settings.app_description,
     openapi_url=settings.openapi_url,
     docs_url=settings.docs_url,
-    redoc_url=settings.redoc_url,
-    lifespan=lifespan
+    redoc_url=settings.redoc_url
 )
 
-# For Pyodide, initialize database immediately since lifespan might not run
-if IS_PYODIDE:
-    logger.info("Pyodide environment detected - initializing database immediately")
-    try:
-        init_db_sync()
-        logger.info("Database initialized successfully in Pyodide")
-    except Exception as e:
-        logger.error(f"Failed to initialize database in Pyodide: {e}")
+# Initialize database immediately since we don't use lifespan
+logger.info("Initializing database...")
+try:
+    # Always use sync initialization since we can't use async during app creation
+    init_db_sync()
+    logger.info("Database initialization complete")
+except Exception as e:
+    logger.error(f"Failed to initialize database: {e}")
 
 # Add CORS middleware
 try:

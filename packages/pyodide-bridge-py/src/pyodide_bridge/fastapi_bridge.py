@@ -288,7 +288,8 @@ class FastAPI(OriginalFastAPI if HAS_FASTAPI else object):
                     else:
                         kwargs[name] = body
                 except Exception:
-                    kwargs[name] = body            # Use default value if available
+                    # Use default value if available
+                    kwargs[name] = body
             elif param.default != inspect.Parameter.empty:
                 # Handle FastAPI Query parameters specially
                 if hasattr(param.default, 'default'):

@@ -88,11 +88,11 @@ class UserService:
         # Ensure search is a string and not None
         if not search or not isinstance(search, str):
             return []
-        
+
         search_term = search.strip().lower()
         if not search_term:
             return []
-            
+
         if isinstance(self.db, AsyncSession):
             stmt = select(User).where(
                 func.lower(User.name).contains(search_term) |

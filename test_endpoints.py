@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Test script to show all available endpoints."""
 
+from app.app_main import app
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'apps', 'backend', 'src'))
-
-from app.app_main import app
+sys.path.insert(0, os.path.join(
+    os.path.dirname(__file__), 'apps', 'backend', 'src'))
 
 
 print("🚀 FastAPI + Pyodide Bridge - Available Endpoints")
