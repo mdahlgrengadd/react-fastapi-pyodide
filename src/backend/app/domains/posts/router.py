@@ -15,7 +15,8 @@ router = APIRouter()
 @router.get("/posts",
             summary="Get all posts",
             description="Returns list of posts with relationships",
-            tags=["posts"])
+            tags=["posts"],
+            operation_id="get_posts")
 async def get_posts(
     db: Union[Session, AsyncSession] = Depends(get_db),
     current_user: dict = Depends(get_current_user)
@@ -28,7 +29,8 @@ async def get_posts(
 @router.get("/posts/{post_id}",
             summary="Get post by ID",
             description="Returns single post with author relationship",
-            tags=["posts"])
+            tags=["posts"],
+            operation_id="get_post")
 async def get_post(
     post_id: int,
     db: Union[Session, AsyncSession] = Depends(get_db),
@@ -47,7 +49,8 @@ async def get_post(
              summary="Create new post",
              description="Creates and returns new post",
              tags=["posts"],
-             status_code=201)
+             status_code=201,
+             operation_id="create_post")
 async def create_post(
     post: PostCreate,
     db: Union[Session, AsyncSession] = Depends(get_db),
@@ -61,7 +64,8 @@ async def create_post(
 @router.get("/users/{user_id}/posts",
             summary="Get user's posts",
             description="Returns list of posts by specific user",
-            tags=["posts"])
+            tags=["posts"],
+            operation_id="get_user_posts")
 async def get_user_posts(
     user_id: int,
     db: Union[Session, AsyncSession] = Depends(get_db),

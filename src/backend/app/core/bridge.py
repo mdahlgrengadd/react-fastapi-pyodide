@@ -168,6 +168,72 @@ def _apply_early_monkey_patch():
 _apply_early_monkey_patch()
 
 # ---------------------------------------------------------------------------
+# Router method patching to capture endpoints from APIRouter instances
+# ---------------------------------------------------------------------------
+
+
+def _patch_router_class():
+    """Patch APIRouter class to intercept route registrations."""
+    try:
+        from fastapi import APIRouter
+        
+        # Store original methods
+        original_get = APIRouter.get
+        original_post = APIRouter.post
+        original_put = APIRouter.put
+        original_patch = APIRouter.patch
+        original_delete = APIRouter.delete
+        
+        def make_router_wrapper(orig_method: callable, method: str):
+            def wrapper(self, path: str, **kwargs):
+                def inner(func: callable):
+                    log(f"Registering {method} {path} → {func.__name__} (router)")
+                    
+                    # Register in our global registry with full path including prefix
+                    operation_id = kwargs.get("operation_id") or func.__name__
+                    
+                    # Try to get the API prefix from settings
+                    full_path = path
+                    try:
+                        from app.core.settings import settings
+                        full_path = settings.api_v1_prefix + path
+                    except Exception:
+                        # Fallback to default prefix if settings unavailable
+                        full_path = "/api/v1" + path
+                    
+                    info = {
+                        "path": full_path,
+                        "method": method,
+                        "operationId": operation_id,
+                        "summary": kwargs.get("summary") or func.__doc__ or f"{method} {path}",
+                        "handler": func,
+                    }
+                    
+                    _endpoints_registry[operation_id] = info
+                    log(f"Registered router endpoint: {operation_id} at {full_path}")
+                    
+                    # Call original method
+                    return orig_method(self, path, **kwargs)(func)
+                return inner
+            return wrapper
+        
+        # Patch router methods
+        APIRouter.get = make_router_wrapper(original_get, "GET")
+        APIRouter.post = make_router_wrapper(original_post, "POST")
+        APIRouter.put = make_router_wrapper(original_put, "PUT")
+        APIRouter.patch = make_router_wrapper(original_patch, "PATCH")
+        APIRouter.delete = make_router_wrapper(original_delete, "DELETE")
+        
+        log("✅ Router class patching applied successfully")
+        
+    except Exception as e:
+        log(f"❌ Router patching failed: {e}")
+
+
+# Apply router patching
+_patch_router_class()
+
+# ---------------------------------------------------------------------------
 # Enhanced Depends shim with async support
 # ---------------------------------------------------------------------------
 

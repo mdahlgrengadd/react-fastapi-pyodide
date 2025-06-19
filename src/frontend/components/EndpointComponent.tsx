@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import { ActionButton } from './ActionButton';
@@ -21,85 +21,86 @@ export const PyodideEndpointComponent: React.FC<
   const [data, setData] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const executeEndpoint = useCallback(
+    async (
+      body?: FormData,
+      customQueryParams?: Record<string, string | number | boolean | undefined>
+    ) => {
+      try {
+        setLoading(true);
+        setError(null);
 
-  const executeEndpoint = async (
-    body?: FormData,
-    customQueryParams?: Record<string, string | number | boolean | undefined>
-  ) => {
-    try {
-      setLoading(true);
-      setError(null);
+        // Convert search params to object
+        const queryParams: Record<string, string> = {};
 
-      // Convert search params to object
-      const queryParams: Record<string, string> = {};
-
-      if (customQueryParams) {
-        Object.entries(customQueryParams).forEach(([key, value]) => {
-          if (value !== undefined && value !== null && value !== "") {
-            queryParams[key] = String(value);
-          }
-        });
-      } else {
-        // Convert URLSearchParams to array first
-        Array.from(searchParams.entries()).forEach(([key, value]) => {
-          if (value !== undefined && value !== null && value !== "") {
-            queryParams[key] = String(value);
-          }
-        });
-      }
-
-      // Convert params to plain object to avoid React Router type issues
-      const pathParams: Record<string, string> = {};
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) {
-          pathParams[key] = value;
+        if (customQueryParams) {
+          Object.entries(customQueryParams).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== "") {
+              queryParams[key] = String(value);
+            }
+          });
+        } else {
+          // Convert URLSearchParams to array first
+          Array.from(searchParams.entries()).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== "") {
+              queryParams[key] = String(value);
+            }
+          });
         }
-      });
 
-      // Fallback: Extract path parameters manually from URL if React Router fails
-      if (
-        Object.keys(pathParams).length === 0 ||
-        Object.values(pathParams).some((v) => v.startsWith(":"))
-      ) {
-        const currentPath = window.location.pathname;
-        const endpointPath = endpoint.path;
-        const extractedParams = extractPathParams(currentPath, endpointPath);
-        Object.assign(pathParams, extractedParams);
-
-        console.log("🔍 Manual path parameter extraction:", {
-          pathParams,
-          currentPath,
-          endpointPath,
+        // Convert params to plain object to avoid React Router type issues
+        const pathParams: Record<string, string> = {};
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined) {
+            pathParams[key] = value;
+          }
         });
+
+        // Fallback: Extract path parameters manually from URL if React Router fails
+        if (
+          Object.keys(pathParams).length === 0 ||
+          Object.values(pathParams).some((v) => v.startsWith(":"))
+        ) {
+          const currentPath = window.location.pathname;
+          const endpointPath = endpoint.path;
+          const extractedParams = extractPathParams(currentPath, endpointPath);
+          Object.assign(pathParams, extractedParams);
+
+          console.log("🔍 Manual path parameter extraction:", {
+            pathParams,
+            currentPath,
+            endpointPath,
+          });
+        }
+
+        console.log("🚀 Executing with params:", {
+          pathParams,
+          queryParams,
+          body,
+        });
+        console.log("🔗 Raw React Router params:", params);
+        console.log("🌐 Current URL:", window.location.href);
+
+        const result = await pyodideEngine.executeEndpoint(
+          endpoint.operationId,
+          pathParams,
+          queryParams,
+          body
+        );
+
+        setData(result);
+      } catch (err) {
+        const error = err as Error;
+        setError(error);
+        if (onError) {
+          onError(error);
+        }
+      } finally {
+        setLoading(false);
       }
-
-      console.log("🚀 Executing with params:", {
-        pathParams,
-        queryParams,
-        body,
-      });
-      console.log("🔗 Raw React Router params:", params);
-      console.log("🌐 Current URL:", window.location.href);
-
-      const result = await pyodideEngine.executeEndpoint(
-        endpoint.operationId,
-        pathParams,
-        queryParams,
-        body
-      );
-
-      setData(result);
-    } catch (err) {
-      const error = err as Error;
-      setError(error);
-      if (onError) {
-        onError(error);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
+    },
+    [endpoint, params, searchParams, onError]
+  );
   useEffect(() => {
     console.log("🔌 PyodideEndpointComponent received endpoint:", endpoint);
     console.log("🔗 React Router params:", params);
@@ -114,12 +115,25 @@ export const PyodideEndpointComponent: React.FC<
     } else {
       setLoading(false);
     }
-  }, [endpoint.operationId, params, searchParams, onError]);
-
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endpoint.operationId, endpoint.method]);
   const handleFormSubmit = async (formData: FormData) => {
     if (endpoint.operationId === "search_users") {
-      // For search, use query parameters
-      await executeEndpoint(undefined, formData);
+      // For search, use query parameters, mapping to correct API parameter
+      const queryParams: Record<string, string | number | boolean | undefined> =
+        {};
+
+      if (formData.search) {
+        queryParams.search = formData.search;
+      }
+      if (formData.skip !== undefined && formData.skip !== "") {
+        queryParams.skip = formData.skip;
+      }
+      if (formData.limit !== undefined && formData.limit !== "") {
+        queryParams.limit = formData.limit;
+      }
+
+      await executeEndpoint(undefined, queryParams);
     } else {
       // For POST/PUT, use request body
       await executeEndpoint(formData);
@@ -219,17 +233,15 @@ export const PyodideEndpointComponent: React.FC<
           endpoint={endpoint}
           onAction={() => handleFormSubmit({})}
         />
-      )}
+      )}{" "}
       {/* Delete Confirmation */}
-      {
-        (endpoint.method === "DELETE" && (
-          <DeleteConfirmation
-            endpoint={endpoint}
-            onConfirm={handleDelete}
-            userId={params.user_id as string | undefined}
-          />
-        )) as React.ReactNode
-      }
+      {endpoint.method === "DELETE" && (
+        <DeleteConfirmation
+          endpoint={endpoint}
+          onConfirm={handleDelete}
+          userId={params.user_id as string}
+        />
+      )}
       {/* Loading State */}
       {loading && (
         <div

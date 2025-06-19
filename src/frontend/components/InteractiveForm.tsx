@@ -33,7 +33,6 @@ export const InteractiveForm: React.FC<InteractiveFormProps> = ({
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
-
   // Determine form fields based on endpoint
   const getFormFields = (): FormField[] => {
     if (endpoint.operationId === "create_user") {
@@ -41,20 +40,33 @@ export const InteractiveForm: React.FC<InteractiveFormProps> = ({
         { name: "name", type: "text", label: "Name", required: true },
         { name: "email", type: "email", label: "Email", required: true },
         { name: "age", type: "number", label: "Age", min: 0, max: 150 },
+        { name: "bio", type: "text", label: "Bio" },
       ];
     } else if (endpoint.operationId === "update_user") {
       return [
         { name: "name", type: "text", label: "Name" },
         { name: "email", type: "email", label: "Email" },
         { name: "age", type: "number", label: "Age", min: 0, max: 150 },
+        { name: "bio", type: "text", label: "Bio" },
         { name: "is_active", type: "checkbox", label: "Active" },
+      ];
+    } else if (endpoint.operationId === "create_post") {
+      return [
+        { name: "title", type: "text", label: "Title", required: true },
+        { name: "content", type: "textarea", label: "Content", required: true },
+        { name: "published", type: "checkbox", label: "Published" },
+        {
+          name: "author_id",
+          type: "number",
+          label: "Author ID",
+          required: true,
+        },
       ];
     } else if (endpoint.operationId === "search_users") {
       return [
-        { name: "name", type: "text", label: "Name (contains)" },
-        { name: "email", type: "text", label: "Email (contains)" },
-        { name: "min_age", type: "number", label: "Min Age", min: 0 },
-        { name: "max_age", type: "number", label: "Max Age", max: 150 },
+        { name: "search", type: "text", label: "Search (name or email)" },
+        { name: "skip", type: "number", label: "Skip", min: 0 },
+        { name: "limit", type: "number", label: "Limit", min: 1, max: 100 },
       ];
     } else if (endpoint.operationId === "clear_persistence") {
       return [
@@ -81,13 +93,14 @@ export const InteractiveForm: React.FC<InteractiveFormProps> = ({
   const fields = getFormFields();
 
   if (fields.length === 0) return null;
-
   const getFormTitle = (): string => {
     switch (endpoint.operationId) {
       case "create_user":
         return "✨ Create New User";
       case "update_user":
         return "✏️ Update User";
+      case "create_post":
+        return "📝 Create New Post";
       case "search_users":
         return "🔍 Search Users";
       case "clear_persistence":
@@ -104,7 +117,6 @@ export const InteractiveForm: React.FC<InteractiveFormProps> = ({
         return endpoint.summary || "Execute Action";
     }
   };
-
   const getSubmitButtonText = (): string => {
     if (isSubmitting) return "⏳ Processing...";
 
@@ -113,6 +125,8 @@ export const InteractiveForm: React.FC<InteractiveFormProps> = ({
         return "✨ Create User";
       case "update_user":
         return "✏️ Update User";
+      case "create_post":
+        return "📝 Create Post";
       case "search_users":
         return "🔍 Search";
       case "clear_persistence":
@@ -154,7 +168,7 @@ export const InteractiveForm: React.FC<InteractiveFormProps> = ({
             >
               {field.label}
               {field.required && <span style={{ color: "#dc3545" }}>*</span>}
-            </label>
+            </label>{" "}
             {field.type === "checkbox" ? (
               <input
                 type="checkbox"
@@ -162,7 +176,24 @@ export const InteractiveForm: React.FC<InteractiveFormProps> = ({
                 onChange={(e) => handleChange(field.name, e.target.checked)}
                 style={{ transform: "scale(1.2)" }}
               />
-            ) : field.type === "action" ? null : ( // For action buttons, don't render an input field
+            ) : field.type === "action" ? null : field.type === "textarea" ? (
+              <textarea
+                value={formData[field.name] ? String(formData[field.name]) : ""}
+                onChange={(e) => handleChange(field.name, e.target.value)}
+                required={field.required}
+                placeholder={`Enter ${field.label.toLowerCase()}`}
+                rows={4}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  border: "1px solid #ced4da",
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                  resize: "vertical",
+                }}
+              />
+            ) : (
+              // For regular input fields
               <input
                 type={field.type}
                 value={formData[field.name] ? String(formData[field.name]) : ""}

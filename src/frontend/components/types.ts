@@ -1,6 +1,6 @@
 export interface FormField {
   name: string;
-  type: string;
+  type: "text" | "email" | "number" | "checkbox" | "textarea" | "action";
   label: string;
   required?: boolean;
   min?: number;
