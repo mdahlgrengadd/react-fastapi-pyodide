@@ -4,6 +4,7 @@ import React, { lazy, Suspense, useEffect, useState } from "react";
 
 import { pyodideEngine } from "./index";
 
+// import SwaggerUI from "swagger-ui-react"; //  static import
 // Lazy load SwaggerUI to reduce initial bundle size, with error handling
 const SwaggerUI = lazy(async () => {
   try {
