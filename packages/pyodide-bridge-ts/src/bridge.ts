@@ -133,8 +133,8 @@ export class Bridge extends SimpleEventEmitter<BridgeEvents> {
       });
     } else {
       // Dynamically import Pyodide
-      const { loadPyodide } = await import("pyodide");
-      this.pyodide = await loadPyodide({
+      const pyodideModule = await import("pyodide");
+      this.pyodide = await pyodideModule.loadPyodide({
         indexURL: this.config.pythonIndexUrl,
       });
     }
@@ -224,49 +224,34 @@ asyncio.ensure_future(install_packages())
       // Don't fail initialization for package installation issues
     }
   }
-
   private async _setupBridge(): Promise<void> {
-    if (!this.pyodide) return; // Load the Python bridge code
+    if (!this.pyodide) return; // Load the Python bridge code (without trying to import pyodide_bridge yet)
     this.pyodide.runPython(`
-# Import bridge functionality
-try:
-    # Import the enhanced FastAPI class with bridge functionality
-    from pyodide_bridge import FastAPI
-    
-    # Create a global bridge instance
-    _bridge_instance = None
-    
-    def get_bridge():
-        global _bridge_instance
-        return _bridge_instance
-    
-    def set_bridge(bridge):
-        global _bridge_instance
-        _bridge_instance = bridge
-    
-    print("Bridge infrastructure ready")
-except ImportError as e:
-    print(f"Warning: Could not import bridge package: {e}")
-    print("Bridge will use fallback mode")
-    
-    # Fallback bridge implementation
-    class FallbackBridge:
-        def __init__(self):
-            self.endpoints = []
-        
-        def get_endpoints(self):
-            return self.endpoints
-        
-        async def invoke(self, operation_id, **kwargs):
-            return {"content": {"error": "Bridge not properly initialized"}, "status_code": 500}
-    
-    _bridge_instance = FallbackBridge()
-    
-    def get_bridge():
-        global _bridge_instance
-        return _bridge_instance
-    `);
+# Create a global bridge instance without importing pyodide_bridge initially
+_bridge_instance = None
 
+def get_bridge():
+    global _bridge_instance
+    return _bridge_instance
+
+def set_bridge(bridge):
+    global _bridge_instance
+    _bridge_instance = bridge
+
+# Create a fallback bridge implementation initially
+class FallbackBridge:
+    def __init__(self):
+        self.endpoints = []
+    
+    def get_endpoints(self):
+        return self.endpoints
+    
+    async def invoke(self, operation_id, **kwargs):
+        return {"content": {"error": "Bridge not properly initialized"}, "status_code": 500}
+
+_bridge_instance = FallbackBridge()
+print("Basic bridge infrastructure ready")
+    `);
     this._log("Bridge infrastructure setup completed");
   }
 
@@ -324,10 +309,23 @@ except ImportError as e:
 import sys
 import os
 
-# Add the backend path to Python path
-backend_path = "${basePath}"
-if backend_path not in sys.path:
-    sys.path.insert(0, backend_path)
+# Add the backend root path to Python path (not just the app path)
+backend_root = "/backend"
+if backend_root not in sys.path:
+    sys.path.insert(0, backend_root)
+    print(f"Added {backend_root} to Python path")
+
+# Now try to import pyodide_bridge and set up proper bridge functionality
+try:
+    from pyodide_bridge import FastAPI
+    print("Successfully imported pyodide_bridge.FastAPI")
+    
+    # Update the global get_bridge/set_bridge functions to use proper bridge
+    globals()['FastAPI'] = FastAPI
+    
+except ImportError as e:
+    print(f"Warning: Could not import pyodide_bridge: {e}")
+    print("Bridge will continue in fallback mode")
 
 try:
     # Import the main application directly (no create_app function)
@@ -336,7 +334,7 @@ try:
     # Set as the bridge instance
     set_bridge(app)
     
-    print(f"Loaded FastAPI app from {backend_path}")
+    print(f"Loaded FastAPI app from {backend_root}")
 except Exception as e:
     print(f"Error loading app: {e}")
     import traceback
