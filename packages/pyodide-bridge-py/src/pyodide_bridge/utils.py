@@ -8,7 +8,7 @@ and other common bridge operations.
 import sys
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional, Set, List
 
 # Check if we're running in Pyodide
 try:
@@ -273,3 +273,118 @@ def compute_object_hash(obj: Any) -> str:
     except Exception:
         # Fallback to type and id
         return hashlib.sha256(f"{type(obj).__name__}_{id(obj)}".encode()).hexdigest()[:16]
+
+
+def extract_endpoints_from_registry(
+    registry: Dict[str, Dict[str, Any]], 
+    excluded_operations: Optional[Set[str]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Extract endpoints from a registry in frontend-friendly format.
+    
+    Converts Python snake_case keys to JavaScript camelCase and handles
+    serialization safely.
+    
+    Args:
+        registry: The route registry to extract from
+        excluded_operations: Set of operation IDs to exclude
+        
+    Returns:
+        List of endpoint dictionaries with camelCase keys
+    """
+    if excluded_operations is None:
+        excluded_operations = {
+            "get_bridge_endpoints",
+            "get_bridge_registry", 
+            "invoke_bridge_endpoint"
+        }
+    
+    endpoints = []
+    
+    for operation_id, route_info in registry.items():
+        if operation_id not in excluded_operations:
+            # Convert to frontend-friendly format with camelCase keys
+            endpoint_data = {
+                "operationId": str(operation_id),
+                "path": str(route_info.get("path", "")),
+                "method": str(route_info.get("method", "")),
+                "summary": str(route_info.get("summary", "")),
+                "tags": list(route_info.get("tags", [])),
+            }
+            
+            # Safely handle response_model
+            response_model = route_info.get("response_model")
+            if response_model:
+                endpoint_data["responseModel"] = convert_to_serializable(response_model)
+            else:
+                endpoint_data["responseModel"] = None
+                
+            # Safely handle request_model  
+            request_model = route_info.get("request_model")
+            if request_model:
+                endpoint_data["requestModel"] = convert_to_serializable(request_model)
+            else:
+                endpoint_data["requestModel"] = None
+                
+            # Safely handle handler name
+            handler = route_info.get("handler")
+            if callable(handler):
+                endpoint_data["handler"] = str(handler.__name__)
+            else:
+                endpoint_data["handler"] = "unknown"
+                
+            endpoints.append(endpoint_data)
+            
+    return endpoints
+
+
+def extract_endpoints_ultra_safe(
+    registry: Dict[str, Dict[str, Any]], 
+    excluded_operations: Optional[Set[str]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Ultra-safe endpoint extraction that avoids all complex objects.
+    
+    This version only extracts basic string/primitive values to avoid
+    any serialization issues.
+    """
+    if excluded_operations is None:
+        excluded_operations = {
+            "get_bridge_endpoints",
+            "get_bridge_registry", 
+            "invoke_bridge_endpoint"
+        }
+        
+    try:
+        endpoints = []
+        registry_keys = list(registry.keys())
+        
+        for operation_id in registry_keys:
+            if operation_id in excluded_operations:
+                continue
+                
+            route_info = registry.get(operation_id, {})
+            
+            # Extract only string/basic values, no complex objects
+            endpoint = {
+                "operationId": str(operation_id),
+                "path": str(route_info.get("path", "/")),
+                "method": str(route_info.get("method", "GET")),
+                "summary": str(route_info.get("summary", "")),
+                "tags": [],  # Empty list to avoid any serialization issues
+                "handler": "unknown"
+            }
+            
+            # Try to get handler name safely
+            try:
+                handler = route_info.get("handler")
+                if handler and hasattr(handler, "__name__"):
+                    endpoint["handler"] = str(handler.__name__)
+            except Exception:
+                pass  # Keep default "unknown"
+                
+            endpoints.append(endpoint)
+            
+        return endpoints
+    except Exception:
+        return []

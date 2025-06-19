@@ -132,8 +132,8 @@ export class Bridge extends SimpleEventEmitter<BridgeEvents> {
         indexURL: this.config.pythonIndexUrl,
       });
     } else {
-      // Dynamically import Pyodide
-      const pyodideModule = await import("pyodide");
+          // Dynamically import Pyodide
+    const pyodideModule = await import("pyodide" as any);
       this.pyodide = await pyodideModule.loadPyodide({
         indexURL: this.config.pythonIndexUrl,
       });

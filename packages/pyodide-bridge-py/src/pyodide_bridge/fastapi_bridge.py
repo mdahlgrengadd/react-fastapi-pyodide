@@ -803,44 +803,8 @@ class FastAPI(OriginalFastAPI if HAS_FASTAPI else object):
 
     def get_endpoints(self) -> List[Dict[str, Any]]:
         """Get list of registered endpoints for frontend consumption."""
-        endpoints = []
-        # Filter out bridge meta-endpoints that shouldn't be directly callable from UI
-        excluded_operations = {
-            "get_bridge_endpoints",
-            "get_bridge_registry",
-            "invoke_bridge_endpoint"
-        }
-
-        for operation_id, route_info in _global_route_registry.items():
-            if operation_id not in excluded_operations:
-                # Safely serialize each field
-                endpoint_data = {
-                    "operationId": operation_id,
-                    "path": route_info["path"],
-                    "method": route_info["method"],
-                    "summary": route_info["summary"],
-                    "tags": route_info.get("tags", []),
-                }
-
-                # Safely handle response_model
-                response_model = route_info.get("response_model")
-                if response_model:
-                    endpoint_data["responseModel"] = convert_to_serializable(
-                        response_model)
-                else:
-                    endpoint_data["responseModel"] = None
-
-                # Safely handle request_model
-                request_model = route_info.get("request_model")
-                if request_model:
-                    endpoint_data["requestModel"] = convert_to_serializable(
-                        request_model)
-                else:
-                    endpoint_data["requestModel"] = None
-
-                endpoints.append(endpoint_data)
-
-        return endpoints
+        from .utils import extract_endpoints_from_registry
+        return extract_endpoints_from_registry(_global_route_registry)
 
     def get_openapi_schema(self) -> Dict[str, Any]:
         """Get OpenAPI schema including bridge-registered routes."""
@@ -869,76 +833,14 @@ class FastAPI(OriginalFastAPI if HAS_FASTAPI else object):
 
 def get_endpoints() -> List[Dict[str, Any]]:
     """Get list of registered endpoints (standalone function for JS access)."""
-    endpoints = []
-    # Filter out bridge meta-endpoints that shouldn't be directly callable from UI
-    excluded_operations = {
-        "get_bridge_endpoints",
-        "get_bridge_registry",
-        "invoke_bridge_endpoint"
-    }
-
-    for operation_id, route_info in _global_route_registry.items():
-        if operation_id not in excluded_operations:
-            # Use only basic, safe data types
-            endpoint_data = {
-                "operationId": str(operation_id),
-                "path": str(route_info.get("path", "")),
-                "method": str(route_info.get("method", "")),
-                "summary": str(route_info.get("summary", "")),
-                # Ensure it's a plain list
-                "tags": list(route_info.get("tags", [])),
-                "responseModel": None,  # Skip complex models for now
-                "requestModel": None,   # Skip complex models for now
-            }
-
-            # Safely handle handler (convert to name for serialization)
-            handler = route_info.get("handler")
-            if callable(handler):
-                endpoint_data["handler"] = str(handler.__name__)
-            else:
-                endpoint_data["handler"] = "unknown"
-
-            endpoints.append(endpoint_data)
-
-    return endpoints
+    from .utils import extract_endpoints_from_registry
+    return extract_endpoints_from_registry(_global_route_registry)
 
 
 def get_endpoints_ultra_safe() -> List[Dict[str, Any]]:
     """Ultra-safe endpoint extraction that avoids all complex objects."""
-    try:
-        endpoints = []
-        registry_keys = list(_global_route_registry.keys())
-
-        for operation_id in registry_keys:
-            if operation_id in {"get_bridge_endpoints", "get_bridge_registry", "invoke_bridge_endpoint"}:
-                continue
-
-            route_info = _global_route_registry.get(operation_id, {})
-
-            # Extract only string/basic values, no complex objects
-            endpoint = {
-                "operationId": str(operation_id),
-                "path": str(route_info.get("path", "/")),
-                "method": str(route_info.get("method", "GET")),
-                "summary": str(route_info.get("summary", "")),
-                "tags": [],  # Empty list to avoid any serialization issues
-                "handler": "unknown"
-            }
-
-            # Try to get handler name safely
-            try:
-                handler = route_info.get("handler")
-                if handler and hasattr(handler, "__name__"):
-                    endpoint["handler"] = str(handler.__name__)
-            except Exception:
-                pass  # Keep default "unknown"
-
-            endpoints.append(endpoint)
-
-        return endpoints
-    except Exception as e:
-        log(f"Error in ultra-safe endpoint extraction: {e}")
-        return []
+    from .utils import extract_endpoints_ultra_safe
+    return extract_endpoints_ultra_safe(_global_route_registry)
 
 
 def get_openapi_schema() -> Dict[str, Any]:

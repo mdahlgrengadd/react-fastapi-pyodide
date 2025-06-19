@@ -278,24 +278,5 @@ def _patch_api_router(APIRouter: Any) -> None:
 
 def get_endpoints() -> List[Dict[str, Any]]:
     """Return endpoints in a frontend-friendly shape (serializable)."""
-    result: List[Dict[str, Any]] = []
-    for info in _registry.values():
-        copy = info.copy()
-        # Replace callable with its __name__ for transport
-        if callable(copy.get("handler")):
-            copy["handler"] = copy["handler"].__name__
-        
-        # Convert Python snake_case keys to JavaScript camelCase for frontend compatibility
-        frontend_friendly = {
-            "operationId": copy.get("operation_id"),
-            "path": copy.get("path"),
-            "method": copy.get("method"),
-            "summary": copy.get("summary"),
-            "tags": copy.get("tags", []),
-            "responseModel": copy.get("response_model"),
-            "requestModel": copy.get("request_model"),
-            "handler": copy.get("handler"),
-        }
-        
-        result.append(convert_to_serializable(frontend_friendly))
-    return result
+    from .utils import extract_endpoints_from_registry
+    return extract_endpoints_from_registry(_registry)

@@ -27,5 +27,8 @@ export { BridgeError, InitializationError, CallError } from "./types.js";
 // Export Bridge class
 export { Bridge } from "./bridge.js";
 
+// Export Fetch Interceptor
+export { FetchInterceptor, type FetchInterceptorConfig } from "./fetch-interceptor.js";
+
 // Version info
 export const version = "0.1.0";

@@ -24,7 +24,44 @@ function App() {
   const [status, setStatus] = useState<string>("Initializing…");
   const [endpoints, setEndpoints] = useState<ApiEndpoint[]>([]);
   const [result, setResult] = useState<unknown>(null);
-  const [isLoading, setIsLoading] = useState(false); // One-time startup
+  const [isLoading, setIsLoading] = useState(false);
+  const [interceptorActive, setInterceptorActive] = useState(false);
+
+  // Set up fetch interceptor directly without custom hook
+  useEffect(() => {
+    if (!bridge) return;
+
+    const setupInterceptor = async () => {
+      try {
+        // Wait for bridge to be ready
+        if (status !== "Ready") return;
+
+        const { FetchInterceptor } = await import('pyodide-bridge-ts');
+        
+        const interceptor = new FetchInterceptor(bridge, {
+          apiPrefix: '/api/v1',
+          debug: true,
+          routeMatcher: (url: string) => {
+            return url.startsWith('/api/v1') || url.startsWith('/api') || (!url.startsWith('http') && !url.startsWith('//'));
+          }
+        });
+
+        setInterceptorActive(true);
+        console.log('✅ Fetch interceptor activated');
+
+        // Cleanup function
+        return () => {
+          interceptor.restore();
+          setInterceptorActive(false);
+        };
+      } catch (error) {
+        console.error('Failed to setup fetch interceptor:', error);
+      }
+    };
+
+    setupInterceptor();
+  }, [bridge, status]);
+
   useEffect(() => {
     (async () => {
       try {
@@ -110,7 +147,8 @@ result
     // The bridge instance never changes, so empty deps are fine
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // Helper to invoke an endpoint
+
+  // Helper to invoke an endpoint via bridge
   const invoke = async (operationId: string) => {
     try {
       setIsLoading(true);
@@ -126,13 +164,40 @@ result
       setIsLoading(false);
     }
   };
+
+  // Demo function to show fetch interception
+  const testFetchInterception = async () => {
+    try {
+      setIsLoading(true);
+      setStatus("Testing fetch interception…");
+      
+      // This fetch call will be automatically intercepted and routed through the bridge!
+      const response = await fetch('/api/v1/system/info');
+      const data = await response.json();
+      
+      setResult({
+        message: "✅ Fetch interception working!",
+        data: data,
+        headers: Object.fromEntries(response.headers.entries()),
+        interceptedVia: "fetch() -> FetchInterceptor -> Pyodide Bridge"
+      });
+      setStatus("Ready");
+    } catch (e) {
+      console.error(e);
+      setStatus(`❌ ${(e as Error).message}`);
+      setResult(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="App min-h-screen bg-gray-50" style={{ padding: "2rem" }}>
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2 text-gray-800">
             React × FastAPI × Pyodide
-          </h1>{" "}
+          </h1>
           <p
             className={`text-lg ${
               status.includes("❌") ? "text-red-600" : "text-gray-600"
@@ -143,6 +208,46 @@ result
               <span className="inline-block ml-2 animate-spin">⚪</span>
             )}
           </p>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">
+              🚀 Fetch Interceptor Demo
+            </h2>
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+              interceptorActive 
+                ? 'bg-green-100 text-green-800' 
+                : 'bg-yellow-100 text-yellow-800'
+            }`}>
+              {interceptorActive ? '✅ Active' : '⏳ Loading'}
+            </span>
+          </div>
+          <p className="text-gray-600 mb-4">
+            The fetch interceptor automatically routes API calls through the Pyodide bridge. 
+            Click below to test a regular fetch() call that gets intercepted!
+          </p>
+          <button
+            onClick={testFetchInterception}
+            disabled={isLoading || !interceptorActive}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              isLoading || !interceptorActive
+                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                : 'bg-green-600 hover:bg-green-700 text-white'
+            }`}
+          >
+            {isLoading ? 'Testing...' : 'Test fetch("/api/v1/system/info")'}
+          </button>
+          
+          {interceptorActive && (
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                             <p className="text-sm text-blue-700">
+                 💡 <strong>Try it yourself:</strong> Open browser dev tools and run{' '}
+                 <code className="bg-blue-200 px-1 rounded">fetch('/api/v1/system/info').then(r =&gt; r.json())</code>{' '}
+                 in the console - it will be automatically intercepted!
+               </p>
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
