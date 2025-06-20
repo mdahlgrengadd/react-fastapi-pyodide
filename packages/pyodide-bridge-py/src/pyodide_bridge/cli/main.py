@@ -44,9 +44,7 @@ def main():
         type=str,
         default=".py",
         help="File extensions to process (comma-separated, default: .py)"
-    )
-
-    # Validate operation_id subcommand
+    )    # Validate operation_id subcommand
     validate_parser = subparsers.add_parser(
         "validate-operation-ids",
         help="Validate that all FastAPI routes have operation_id"
@@ -63,6 +61,39 @@ def main():
         help="File extensions to check (comma-separated, default: .py)"
     )
 
+    # Generate pages subcommand
+    generate_parser = subparsers.add_parser(
+        "generate-pages",
+        help="Generate React page components from FastAPI OpenAPI schema"
+    )
+    generate_parser.add_argument(
+        "--backend-path",
+        type=str,
+        default="apps/backend/src",
+        help="Path to the FastAPI backend source directory (default: apps/backend/src)"
+    )
+    generate_parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="apps/frontend/src/pages",
+        help="Output directory for generated page components (default: apps/frontend/src/pages)"
+    )
+    generate_parser.add_argument(
+        "--schema-file",
+        type=str,
+        help="Load OpenAPI schema from JSON file instead of backend"
+    )
+    generate_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging"
+    )
+    generate_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be generated without writing files"
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -73,6 +104,8 @@ def main():
         add_operation_ids_with_args(args)
     elif args.command == "validate-operation-ids":
         validate_operation_ids_with_args(args)
+    elif args.command == "generate-pages":
+        generate_pages_with_args(args)
 
 
 def add_operation_ids_with_args(args):
@@ -126,6 +159,74 @@ def validate_operation_ids_with_args(args):
 
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def generate_pages_with_args(args):
+    """Execute generate-pages command with parsed arguments."""
+    from pathlib import Path
+    from .generate_pages import PageGenerator, load_openapi_schema
+    import json
+    import logging
+
+    # Setup logging
+    level = logging.DEBUG if args.debug else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    logger = logging.getLogger(__name__)
+
+    try:
+        backend_path = Path(args.backend_path)
+        output_dir = Path(args.output_dir)
+
+        # Load OpenAPI schema
+        if args.schema_file:
+            logger.info(f"Loading OpenAPI schema from {args.schema_file}")
+            with open(args.schema_file, 'r', encoding='utf-8') as f:
+                schema = json.load(f)
+        else:
+            logger.info(f"Loading OpenAPI schema from backend at {backend_path}")
+            schema = load_openapi_schema(backend_path)
+
+        logger.info(f"Found {len(schema.get('paths', {}))} API endpoints")
+
+        if args.dry_run:
+            logger.info("Dry run mode - analyzing schema structure...")
+            generator = PageGenerator(schema, output_dir)
+            domains = generator._group_endpoints_by_domain()
+
+            print("\nDomains found:")
+            for domain, endpoints in domains.items():
+                print(f"  {domain}: {len(endpoints)} endpoints")
+                for endpoint in endpoints[:3]:  # Show first 3
+                    print(f"    {endpoint['method']} {endpoint['path']}")
+                if len(endpoints) > 3:
+                    print(f"    ... and {len(endpoints) - 3} more")
+
+            print(f"\nWould generate {len([d for d in domains.keys() if d and d != 'general'])} page components in {output_dir}")
+            return
+
+        # Create output directory
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate pages
+        generator = PageGenerator(schema, output_dir)
+        generated_files = generator.generate_all_pages()
+
+        if generated_files:
+            logger.info(f"Successfully generated {len(generated_files)} files:")
+            for file_path in generated_files:
+                logger.info(f"  {file_path}")
+        else:
+            logger.warning("No page components were generated")
+
+    except Exception as e:
+        logger.error(f"Failed to generate page components: {e}")
+        if args.debug:
+            import traceback
+            traceback.print_exc()
         sys.exit(1)
 
 

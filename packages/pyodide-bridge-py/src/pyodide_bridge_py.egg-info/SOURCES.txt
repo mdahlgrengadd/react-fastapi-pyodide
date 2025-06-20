@@ -2,8 +2,10 @@ README.md
 pyproject.toml
 src/pyodide_bridge/__init__.py
 src/pyodide_bridge/fastapi_bridge.py
+src/pyodide_bridge/monkey_patch.py
 src/pyodide_bridge/utils.py
 src/pyodide_bridge/cli/__init__.py
+src/pyodide_bridge/cli/generate_pages.py
 src/pyodide_bridge/cli/main.py
 src/pyodide_bridge/cli/operation_id_manager.py
 src/pyodide_bridge_py.egg-info/PKG-INFO

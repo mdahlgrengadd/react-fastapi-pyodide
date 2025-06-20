@@ -74,6 +74,21 @@ if __name__ == "__main__":
     bridge.setup_pyodide_environment()
 ```
 
+## 🛠️ CLI Tools
+
+The package includes command-line utilities for managing FastAPI applications:
+
+```bash
+# Validate that all routes have operation_id (required by bridge)
+pyodide-bridge validate-operation-ids src/
+
+# Add missing operation_id to route decorators
+pyodide-bridge add-operation-ids src/ --dry-run
+pyodide-bridge add-operation-ids src/
+```
+
+See [CLI.md](CLI.md) for detailed CLI documentation.
+
 ## 📚 API Reference
 
 ### FastAPIBridge Class
@@ -432,4 +447,4 @@ MIT - See [LICENSE](../../LICENSE) file for details.
 
 ---
 
-Built with ❤️ for the Python and Pyodide communities. 
+Built with ❤️ for the Python and Pyodide communities.

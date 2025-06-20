@@ -5,18 +5,18 @@ import { useAPIQuery } from 'react-router-fastapi';
 
 
 
-export const SystemPage: React.FC = () => {
-  return <SystemList />;
+export const AnalyticsPage: React.FC = () => {
+  return <AnalyticsList />;
 };
 
-const SystemList: React.FC = () => {
+const AnalyticsList: React.FC = () => {
   const {
-    data: system,
+    data: analytics,
     isLoading,
     error
   } = useAPIQuery<any[]>(
-    ['system'],
-    '/api/v1/system/async-demo'
+    ['analytics'],
+    '/api/v1/analytics'
   );
 
   return (
@@ -25,8 +25,8 @@ const SystemList: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">System Management</h1>
-            <p className="text-gray-600">Manage system data and entries</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Analytics Management</h1>
+            <p className="text-gray-600">Manage analytics data and entries</p>
           </div>
           <Link
             to="/"
@@ -51,24 +51,24 @@ const SystemList: React.FC = () => {
         {error && (
           <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-red-800 font-medium">Failed to load system</p>
+              <p className="text-red-800 font-medium">Failed to load analytics</p>
               <p className="text-red-600 text-sm mt-1">{error instanceof Error ? error.message : 'Unknown error'}</p>
             </div>
           </div>
         )}
 
         {/* Data */}
-        {system && Array.isArray(system) && system.length > 0 && (
+        {analytics && Array.isArray(analytics) && analytics.length > 0 && (
           <div className="bg-white rounded-lg shadow-lg overflow-hidden">
             <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">System</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Analytics</h2>
               <div className="space-y-4">
-                {system.map((item: any, index: number) => (
+                {analytics.map((item: any, index: number) => (
                   <div key={item.id || index} className="border rounded-lg p-4 hover:bg-gray-50">
                     <div className="flex items-center justify-between">
                       <div>
                         <h3 className="font-medium text-gray-900">
-                          {item.name || item.title || item.email || `System ${item.id || index + 1}`}
+                          {item.name || item.title || item.email || `Analytics ${item.id || index + 1}`}
                         </h3>
                         {item.description && (
                           <p className="text-gray-600 text-sm mt-1">{item.description}</p>
@@ -76,7 +76,7 @@ const SystemList: React.FC = () => {
                       </div>
                       {item.id && (
                         <Link
-                          to={`/system/${item.id}`}
+                          to={`/analytics/${item.id}`}
                           className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
                         >
                           View Details

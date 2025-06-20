@@ -1,4 +1,5 @@
 [console_scripts]
 pyodide-bridge = pyodide_bridge.cli.main:main
 pyodide-bridge-add-operation-ids = pyodide_bridge.cli.main:add_operation_ids_command
+pyodide-bridge-generate-pages = pyodide_bridge.cli.generate_pages:main
 pyodide-bridge-validate-operation-ids = pyodide_bridge.cli.main:validate_operation_ids_command
