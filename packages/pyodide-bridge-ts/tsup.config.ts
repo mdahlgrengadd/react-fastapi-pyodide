@@ -6,14 +6,18 @@ export default defineConfig({
   dts: {
     compilerOptions: {
       module: "es2020",
-      moduleResolution: "node"
+      moduleResolution: "node",
+      jsx: "react-jsx"
     }
   }, // Generate type definitions with custom options
   clean: true, // Clean output directory before build
   target: "es2020",
-  external: ["pyodide"], // Pyodide is provided as peer dependency
+  external: ["pyodide", "react", "react-dom", "react-router-dom", "react-query"], // External dependencies
   sourcemap: true,
   minify: false, // Disable minification to avoid issues with dynamic imports
   splitting: false, // Keep as single bundle for simplicity
   treeshake: true,
+  esbuildOptions(options) {
+    options.jsx = 'automatic';
+  },
 });

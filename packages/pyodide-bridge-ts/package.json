@@ -42,10 +42,16 @@
   },
   "homepage": "https://github.com/your-repo/react-fastapi-pyodide#readme",
   "peerDependencies": {
-    "pyodide": ">=0.27.0"
+    "pyodide": ">=0.27.0",
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0",
+    "react-router-dom": ">=6.0.0",
+    "react-query": ">=3.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.0.0",

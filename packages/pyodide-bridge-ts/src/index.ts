@@ -30,5 +30,8 @@ export { Bridge } from "./bridge.js";
 // Export Fetch Interceptor
 export { FetchInterceptor, type FetchInterceptorConfig } from "./fetch-interceptor.js";
 
+// Export BridgeRouter
+export { BridgeRouter, type BridgeRouterConfig, type BridgeRouterProps } from "./BridgeRouter.js";
+
 // Version info
 export const version = "0.1.0";
