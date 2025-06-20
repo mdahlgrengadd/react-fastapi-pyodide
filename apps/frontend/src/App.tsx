@@ -1,7 +1,12 @@
 import './App.css';
 
-import { Bridge } from 'pyodide-bridge-ts';
-import { useEffect, useState } from 'react';
+import { Bridge, FetchInterceptor } from 'pyodide-bridge-ts';
+import { FastAPIRouter } from '../../../packages/react-router-fastapi';
+import type { RouteConfig } from '../../../packages/react-router-fastapi';
+import { useEffect, useState, useRef } from 'react';
+
+// Import page components
+import { HomePage, SystemPage, UsersPage, DashboardPage, PostsPage } from './pages';
 
 interface ApiEndpoint {
   operationId: string;
@@ -12,70 +17,39 @@ interface ApiEndpoint {
 }
 
 function App() {
-  // Create one Bridge instance for the lifetime of the component
   const [bridge] = useState(
     () =>
       new Bridge({
         debug: true,
-        // Install our own bridge package plus common deps
         packages: ["fastapi", "pydantic", "sqlalchemy", "httpx"],
       })
   );
+  
   const [status, setStatus] = useState<string>("Initializing…");
-  const [endpoints, setEndpoints] = useState<ApiEndpoint[]>([]);
-  const [result, setResult] = useState<unknown>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [interceptorActive, setInterceptorActive] = useState(false);
+  const [bridgeReady, setBridgeReady] = useState(false);
+  const [interceptor, setInterceptor] = useState<InstanceType<typeof FetchInterceptor> | null>(null);
+  const initializationRef = useRef(false);
 
-  // Set up fetch interceptor directly without custom hook
+  // Initialize bridge and setup interceptor
   useEffect(() => {
-    if (!bridge) return;
-
-    const setupInterceptor = async () => {
-      try {
-        // Wait for bridge to be ready
-        if (status !== "Ready") return;
-
-        const { FetchInterceptor } = await import('pyodide-bridge-ts');
-        
-        const interceptor = new FetchInterceptor(bridge, {
-          apiPrefix: '/api/v1',
-          debug: true,
-          routeMatcher: (url: string) => {
-            return url.startsWith('/api/v1') || url.startsWith('/api') || (!url.startsWith('http') && !url.startsWith('//'));
-          }
-        });
-
-        setInterceptorActive(true);
-        console.log('✅ Fetch interceptor activated');
-
-        // Cleanup function
-        return () => {
-          interceptor.restore();
-          setInterceptorActive(false);
-        };
-      } catch (error) {
-        console.error('Failed to setup fetch interceptor:', error);
+    const initializeBridge = async () => {
+      // Prevent multiple initializations
+      if (initializationRef.current) {
+        console.log('🔄 Skipping duplicate initialization');
+        return;
       }
-    };
+      initializationRef.current = true;
 
-    setupInterceptor();
-  }, [bridge, status]);
-
-  useEffect(() => {
-    (async () => {
       try {
+        console.log('🚀 Starting bridge initialization...');
         setStatus("Loading Pyodide…");
         await bridge.initialize();
 
         // Mount backend Python sources into Pyodide FS
         setStatus("Fetching backend sources…");
-
         const fileListResponse = await fetch("/backend/backend_filelist.json");
         if (!fileListResponse.ok) {
-          throw new Error(
-            `Failed to fetch file list: ${fileListResponse.statusText}`
-          );
+          throw new Error(`Failed to fetch file list: ${fileListResponse.statusText}`);
         }
         const fileList: string[] = await fileListResponse.json();
 
@@ -85,16 +59,11 @@ function App() {
           const fileUrl = `/backend/${relPath}`;
           const fileResponse = await fetch(fileUrl);
           if (!fileResponse.ok) {
-            console.warn(
-              `Failed to fetch ${fileUrl}: ${fileResponse.statusText}`
-            );
+            console.warn(`Failed to fetch ${fileUrl}: ${fileResponse.statusText}`);
             continue;
           }
           const content = await fileResponse.text();
-          const dirName = `/backend/${relPath.substring(
-            0,
-            relPath.lastIndexOf("/")
-          )}`;
+          const dirName = `/backend/${relPath.substring(0, relPath.lastIndexOf("/"))}`;
           if (dirName) {
             try {
               pyodide.FS.mkdirTree(dirName);
@@ -106,212 +75,173 @@ function App() {
         }
 
         setStatus("Loading backend…");
-        const loadedEndpoints = await bridge.loadBackend(
-          "/backend/app",
-          "directory"
-        );
+        await bridge.loadBackend("/backend/app", "directory");
 
-        let finalEndpoints = loadedEndpoints;
-        if (finalEndpoints.length === 0) {
-          try {
-            // Try the safer standalone function first
-            const endpointsStr = pyodide.runPython(`
-import json
-result = "[]"
-if 'get_endpoints_safe' in globals():
-    try:
-        result = json.dumps(get_endpoints_safe())
-    except Exception as e:
-        print(f"Error with standalone function: {e}")
-        # Fallback to bridge method
-        result = json.dumps(get_bridge().get_endpoints())
-else:
-    result = json.dumps(get_bridge().get_endpoints())
-result
-            `);
-            finalEndpoints = JSON.parse(
-              endpointsStr as string
-            ) as ApiEndpoint[];
-          } catch (err) {
-            console.warn("Could not retrieve endpoints via direct Python", err);
+        // Setup fetch interceptor - only after backend is loaded
+        setStatus("Setting up API interceptor…");
+        
+        const fetchInterceptor = new FetchInterceptor(bridge, {
+          apiPrefix: '/api/v1',
+          baseUrl: 'http://localhost:8000', // Will be intercepted
+          debug: false, // Reduce logging now that it's working
+          routeMatcher: (url: string) => {
+            // More specific matching - only intercept actual API calls
+            // Don't intercept:
+            // - Static files (contain file extensions)
+            // - Backend source files
+            // - Non-API URLs
+            
+            // Exclude backend files
+            if (url.startsWith('/backend/')) {
+              return false;
+            }
+            
+            // Exclude static files (contain extensions)
+            if (url.match(/\.[a-zA-Z0-9]+(\?|$)/)) {
+              return false;
+            }
+            
+            // Handle absolute URLs - check if they match our base URL
+            if (url.startsWith('http://localhost:8000/')) {
+              // Extract the path from absolute URL
+              const path = url.replace('http://localhost:8000', '');
+              // Check if it's an API path
+              const shouldIntercept = path.startsWith('/api/v1/') || 
+                     path === '/docs' || 
+                     path === '/openapi.json' ||
+                     path === '/redoc';
+              return shouldIntercept;
+            }
+            
+            // Handle relative URLs
+            if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('//')) {
+              // Only intercept specific API patterns
+              const shouldIntercept = url.startsWith('/api/v1/') || 
+                     url === '/docs' || 
+                     url === '/openapi.json' ||
+                     url === '/redoc';
+              return shouldIntercept;
+            }
+            
+            // Don't intercept anything else
+            return false;
           }
-        }
+        });
 
-        setEndpoints(finalEndpoints);
-        setStatus("Ready");
+        setInterceptor(fetchInterceptor);
+        
+        // Now create the API client AFTER the interceptor is set up
+        console.log('🔧 Creating API client...');
+        const { createAPIClient } = await import('../../../packages/react-router-fastapi');
+        createAPIClient({
+          baseURL: 'http://localhost:8000',
+          tokenKey: 'access_token',
+          refreshTokenKey: 'refresh_token',
+          retryAttempts: 3,
+          retryDelay: 1000,
+        });
+        
+        setBridgeReady(true);
+        setStatus("Ready - FastAPI Router Active");
+        
+        console.log('✅ Bridge and interceptor ready');
       } catch (e) {
-        console.error(e);
+        console.error('❌ Bridge initialization failed:', e);
         setStatus(`❌ ${(e as Error).message}`);
+        initializationRef.current = false; // Reset on error
       }
-    })();
-    // The bridge instance never changes, so empty deps are fine
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    };
 
-  // Helper to invoke an endpoint via bridge
-  const invoke = async (operationId: string) => {
-    try {
-      setIsLoading(true);
-      setStatus(`Calling ${operationId}…`);
-      const data = await bridge.call(operationId);
-      setResult(data);
-      setStatus("Ready");
-    } catch (e) {
-      console.error(e);
-      setStatus(`❌ ${(e as Error).message}`);
-      setResult(null);
-    } finally {
-      setIsLoading(false);
+    // Only run once
+    if (!bridgeReady && !initializationRef.current) {
+      initializeBridge();
     }
-  };
 
-  // Demo function to show fetch interception
-  const testFetchInterception = async () => {
-    try {
-      setIsLoading(true);
-      setStatus("Testing fetch interception…");
-      
-      // This fetch call will be automatically intercepted and routed through the bridge!
-      const response = await fetch('/api/v1/system/info');
-      const data = await response.json();
-      
-      setResult({
-        message: "✅ Fetch interception working!",
-        data: data,
-        headers: Object.fromEntries(response.headers.entries()),
-        interceptedVia: "fetch() -> FetchInterceptor -> Pyodide Bridge"
-      });
-      setStatus("Ready");
-    } catch (e) {
-      console.error(e);
-      setStatus(`❌ ${(e as Error).message}`);
-      setResult(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    // Cleanup
+    return () => {
+      if (interceptor) {
+        interceptor.restore();
+      }
+    };
+  }, [bridge]); // Remove interceptor from dependency array
 
-  return (
-    <div className="App min-h-screen bg-gray-50" style={{ padding: "2rem" }}>
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2 text-gray-800">
-            React × FastAPI × Pyodide
-          </h1>
-          <p
-            className={`text-lg ${
-              status.includes("❌") ? "text-red-600" : "text-gray-600"
-            }`}
-          >
-            Status: {status}
+  // Route definitions - these will be handled by FastAPIRouter
+  const routes: RouteConfig[] = [
+    {
+      path: '/',
+      element: <HomePage />,
+    },
+    {
+      path: '/dashboard',
+      element: <DashboardPage />,
+      requiresAuth: false, // Set to true if you want to enable auth
+    },
+    {
+      path: '/system',
+      element: <SystemPage />,
+    },
+    {
+      path: '/users',
+      element: <UsersPage />,
+    },
+    {
+      path: '/users/:id',
+      element: <UsersPage />, // Will show user detail based on ID
+    },
+    {
+      path: '/posts',
+      element: <PostsPage />,
+    },
+    {
+      path: '/posts/:id',
+      element: <PostsPage />, // Will show post detail based on ID
+    },
+  ];
+
+  // Show loading screen while bridge initializes
+  if (!bridgeReady) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">
+            Initializing FastAPI Bridge
+          </h2>
+          <p className={`text-lg ${
+            status.includes("❌") ? "text-red-600" : "text-gray-600"
+          }`}>
+            {status}
             {!status.includes("Ready") && !status.includes("❌") && (
               <span className="inline-block ml-2 animate-spin">⚪</span>
             )}
           </p>
         </div>
-
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-gray-800">
-              🚀 Fetch Interceptor Demo
-            </h2>
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-              interceptorActive 
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-yellow-100 text-yellow-800'
-            }`}>
-              {interceptorActive ? '✅ Active' : '⏳ Loading'}
-            </span>
-          </div>
-          <p className="text-gray-600 mb-4">
-            The fetch interceptor automatically routes API calls through the Pyodide bridge. 
-            Click below to test a regular fetch() call that gets intercepted!
-          </p>
-          <button
-            onClick={testFetchInterception}
-            disabled={isLoading || !interceptorActive}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              isLoading || !interceptorActive
-                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                : 'bg-green-600 hover:bg-green-700 text-white'
-            }`}
-          >
-            {isLoading ? 'Testing...' : 'Test fetch("/api/v1/system/info")'}
-          </button>
-          
-          {interceptorActive && (
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                             <p className="text-sm text-blue-700">
-                 💡 <strong>Try it yourself:</strong> Open browser dev tools and run{' '}
-                 <code className="bg-blue-200 px-1 rounded">fetch('/api/v1/system/info').then(r =&gt; r.json())</code>{' '}
-                 in the console - it will be automatically intercepted!
-               </p>
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">
-            Available Endpoints
-          </h2>
-          {endpoints.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {endpoints.map((ep) => (
-                <button
-                  key={ep.operationId}
-                  className={`p-3 rounded-lg text-left transition-colors ${
-                    isLoading
-                      ? "bg-gray-100 cursor-not-allowed border-gray-200"
-                      : "bg-blue-50 hover:bg-blue-100 border-blue-200"
-                  } border`}
-                  onClick={() => invoke(ep.operationId)}
-                  disabled={isLoading}
-                >
-                  <div className="font-medium text-blue-800">
-                    {isLoading ? "Loading..." : ep.operationId}
-                  </div>
-                  <div className="text-sm text-gray-600 mt-1">
-                    {ep.method} {ep.path}
-                  </div>
-                  {ep.summary && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      {ep.summary}
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-center py-8 text-gray-500">
-              {status.includes("❌")
-                ? "Failed to load endpoints"
-                : "Loading endpoints..."}
-            </p>
-          )}
-        </div>
-
-        {result !== null && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold text-gray-800">
-                API Response
-              </h3>
-              <button
-                onClick={() => setResult(null)}
-                className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded transition-colors"
-              >
-                Clear
-              </button>
-            </div>
-            <pre className="bg-gray-50 p-4 rounded border overflow-auto max-h-96 text-sm">
-              {typeof result === "string"
-                ? result
-                : JSON.stringify(result, null, 2)}
-            </pre>
-          </div>
-        )}
       </div>
-    </div>
+    );
+  }
+
+  // Render FastAPIRouter once bridge is ready
+  return (
+    <FastAPIRouter
+      routes={routes}
+      apiBaseURL="http://localhost:8000" // This will be intercepted by FetchInterceptor
+      enableDevTools={true}
+      onError={(error: Error) => {
+        console.error('FastAPI Router Error:', error);
+        setStatus(`❌ Router Error: ${error.message}`);
+      }}
+      loadingComponent={() => (
+        <div className="flex justify-center items-center p-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      )}
+      errorComponent={({ error }: { error: Error }) => (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded m-4">
+          <strong className="font-bold">Error: </strong>
+          <span className="block sm:inline">{error.message}</span>
+        </div>
+      )}
+    />
   );
 }
 
