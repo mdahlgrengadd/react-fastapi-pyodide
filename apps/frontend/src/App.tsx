@@ -1,8 +1,11 @@
 import './App.css';
 
-import { Bridge, FetchInterceptor } from 'pyodide-bridge-ts';
+import { Bridge } from 'pyodide-bridge-ts';
 import { useEffect, useRef, useState } from 'react';
-import { FastAPIRouter } from 'react-router-fastapi';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from 'react-query';
+import { ReactQueryDevtools } from 'react-query/devtools';
+import { OpenAPI } from './client';
 
 // Auto-generated page imports
 import { 
@@ -19,7 +22,16 @@ import {
   UsersPage
 } from './pages';
 
-import type { RouteConfig } from "react-router-fastapi";
+// Create QueryClient instance
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+  },
+});
 
 function App() {
   const [bridge] = useState(
@@ -32,12 +44,10 @@ function App() {
 
   const [status, setStatus] = useState<string>("Initializing…");
   const [bridgeReady, setBridgeReady] = useState(false);
-  const [interceptor, setInterceptor] = useState<InstanceType<
-    typeof FetchInterceptor
-  > | null>(null);
+  const [interceptor, setInterceptor] = useState<any>(null);
   const initializationRef = useRef(false);
 
-  // Initialize bridge and setup interceptor
+  // Initialize bridge and setup client
   useEffect(() => {
     const initializeBridge = async () => {
       if (initializationRef.current) {
@@ -75,40 +85,24 @@ function App() {
         setStatus("Starting FastAPI server…");
         await bridge.loadBackend("/backend", "directory");
 
-        setStatus("Setting up API interceptor…");
+        // Configure the generated client to use the bridge
+        OpenAPI.BASE = ""; // Use relative URLs since we're on same origin
+        
+        // Set up request interceptor to route API calls through the bridge
         const { FetchInterceptor } = await import("pyodide-bridge-ts");
         const fetchInterceptor = new FetchInterceptor(bridge, {
           apiPrefix: "/api/v1",
-          baseUrl: "http://localhost:8000",
           debug: true,
           routeMatcher: (url: string) => {
-            if (url.match(/\.[a-zA-Z0-9]+(\?|$)/)) return false;
-            if (url.startsWith("http://localhost:8000/")) {
-              const path = url.replace("http://localhost:8000", "");
-              return path.startsWith("/api/v1/") || path === "/docs" || path === "/openapi.json" || path === "/redoc";
-            }
-            if (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("//")) {
-              return url.startsWith("/api/v1/") || url === "/docs" || url === "/openapi.json" || url === "/redoc";
-            }
-            return false;
+            // Route API calls and docs through the bridge
+            return url.startsWith("/api/v1/") || url === "/docs" || url === "/openapi.json" || url === "/redoc";
           },
         });
-
+        
         setInterceptor(fetchInterceptor);
-
-        console.log("🔧 Creating API client...");
-        const { createAPIClient } = await import("react-router-fastapi");
-        createAPIClient({
-          baseURL: "http://localhost:8000",
-          tokenKey: "access_token",
-          refreshTokenKey: "refresh_token",
-          retryAttempts: 3,
-          retryDelay: 1000,
-        });
-
         setBridgeReady(true);
-        setStatus("Ready - FastAPI Router Active");
-        console.log("✅ Bridge and interceptor ready");
+        setStatus("Ready - API Client Active");
+        console.log("✅ Bridge and client ready");
       } catch (e) {
         console.error("❌ Bridge initialization failed:", e);
         setStatus(`❌ ${(e as Error).message}`);
@@ -126,63 +120,6 @@ function App() {
       }
     };
   }, [bridge]);
-
-  // Auto-generated route definitions
-  const routes: RouteConfig[] = [
-    {
-      path: "/",
-      element: <DashboardPage />,
-      requiresAuth: false,
-    },
-    {
-      path: "/analytics",
-      element: <AnalyticsPage />,
-    },
-    {
-      path: "/async",
-      element: <AsyncPage />,
-    },
-    {
-      path: "/dashboards",
-      element: <DashboardsPage />,
-    },
-    {
-      path: "/health",
-      element: <HealthPage />,
-    },
-    {
-      path: "/live",
-      element: <LivePage />,
-    },
-    {
-      path: "/persistence",
-      element: <PersistencePage />,
-    },
-    {
-      path: "/posts",
-      element: <PostsPage />,
-    },
-    {
-      path: "/posts/:id",
-      element: <PostsPage />,
-    },
-    {
-      path: "/stream",
-      element: <StreamPage />,
-    },
-    {
-      path: "/system",
-      element: <SystemPage />,
-    },
-    {
-      path: "/users",
-      element: <UsersPage />,
-    },
-    {
-      path: "/users/:id",
-      element: <UsersPage />,
-    },
-  ];
 
   if (!bridgeReady) {
     return (
@@ -202,26 +139,26 @@ function App() {
   }
 
   return (
-    <FastAPIRouter
-      routes={routes}
-      apiBaseURL="http://localhost:8000"
-      enableDevTools={true}
-      onError={(error: Error) => {
-        console.error("FastAPI Router Error:", error);
-        setStatus(`❌ Router Error: ${error.message}`);
-      }}
-      loadingComponent={() => (
-        <div className="flex justify-center items-center p-8">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      )}
-      errorComponent={({ error }: { error: Error }) => (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded m-4">
-          <strong className="font-bold">Error: </strong>
-          <span className="block sm:inline">{error.message}</span>
-        </div>
-      )}
-    />
+    <QueryClientProvider client={queryClient}>
+      <Router>
+        <Routes>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/async" element={<AsyncPage />} />
+          <Route path="/dashboards" element={<DashboardsPage />} />
+          <Route path="/health" element={<HealthPage />} />
+          <Route path="/live" element={<LivePage />} />
+          <Route path="/persistence" element={<PersistencePage />} />
+          <Route path="/posts" element={<PostsPage />} />
+          <Route path="/posts/:id" element={<PostsPage />} />
+          <Route path="/stream" element={<StreamPage />} />
+          <Route path="/system" element={<SystemPage />} />
+          <Route path="/users" element={<UsersPage />} />
+          <Route path="/users/:id" element={<UsersPage />} />
+        </Routes>
+      </Router>
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
   );
 }
 
