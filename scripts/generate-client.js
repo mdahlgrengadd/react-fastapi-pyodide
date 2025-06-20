@@ -127,11 +127,10 @@ async function generateClient() {
     log('📂 Creating output directory...', colors.cyan);
     if (!fs.existsSync(outDir)) {
       fs.mkdirSync(outDir, { recursive: true });
-    }
-    
-    log('🛠️ Generating TypeScript SDK...', colors.cyan);
-    await runCommand('npx', [
-      '@hey-api/openapi-ts@latest',
+    }    log('🛠️ Generating TypeScript SDK...', colors.cyan);
+    await runCommand('bun', [
+      'x',
+      '@hey-api/openapi-ts',
       '-i', tmpSpec,
       '-o', outDir,
       '-c', 'legacy/fetch'

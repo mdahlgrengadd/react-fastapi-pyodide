@@ -1,120 +1,171 @@
-# Project Documentation
+# React FastAPI Pyodide
 
-Welcome to **React FastAPI Pyodide** – a framework that runs a real FastAPI backend entirely in the browser using Pyodide, seamlessly integrated with React Router.
+A full-stack web application with **React frontend**, **FastAPI backend**, and **Pyodide bridge** for running Python in the browser.
 
-See it live [here](https://mdahlgrengadd.github.io/react-fastapi-pyodide/).
+## ✨ Features
 
----
+- 🚀 **Auto-generated React pages** from FastAPI OpenAPI schema
+- 🔗 **Type-safe API client** with `@hey-api/openapi-ts`
+- 🐍 **Python in browser** via Pyodide bridge
+- ⚡ **Fast builds** with Bun
+- 📱 **Modern UI** with Tailwind CSS
+- 🔄 **Live reloading** development server
 
-## Table of Contents
+## 🚀 Quick Start
 
-1. [Project Overview](#project-overview)
-2. [Directory Structure](#directory-structure)
-3. [Prerequisites](#prerequisites)
-4. [Setup & Development](#setup--development)
-5. [Building & Deployment](#building--deployment)
-6. [Pyodide Integration](#pyodide-integration)
-7. [API Reference](#api-reference)
-8. [Frontend Overview](#frontend-overview)
-9. [Contributing](#contributing)
+### Prerequisites
+- **Python 3.9+**
+- **Node.js 18+** 
+- **Bun** (recommended) or npm
 
----
+### Setup
 
-## Project Overview
-This project demonstrates how to run a full-featured FastAPI application in the browser using Pyodide, combined with a React frontend:
-- **Backend**: Modular Python API in `src/backend/`, powered by FastAPI and SQLAlchemy, loaded into the browser via Pyodide.
-- **Frontend**: React + Vite + React Router + Lucide icons, with components to load and interact with the Python API.
-- **Persistence**: SQLite database and Python packages persist across sessions via IndexedDB (IDBFS).
+```bash
+# Clone and install
+git clone <your-repo>
+cd react-fastapi-pyodide
+bun install
 
-## Directory Structure
-```
-root/
-├── public/                 # Static assets and generated Python files
-│   └── backend/            # Copied from src/backend before build/run
-├── scripts/                # Build & deployment scripts
-├── src/
-│   ├── backend/            # Source Python API (FastAPI + SQLAlchemy)
-│   │   ├── database/
-│   │   ├── models/
-│   │   ├── schemas/
-│   │   └── v1/
-│   └── frontend/           # React app source
-│       ├── components/     # Reusable React components
-│       └── pages/          # Page-level components
-├── docs/                   # Project documentation (this file)
-├── vite.config.ts          # Vite configuration
-└── package.json            # Node.js project metadata
+# Start backend server
+bun run dev:backend
+
+# Generate TypeScript client + React pages
+bun run generate:pages:enhanced
+
+# Start frontend
+bun run dev:frontend
 ```
 
-## Prerequisites
-- Node.js 16+
-- npm or yarn
-- Modern browser (with WebAssembly support)
+Visit `http://localhost:3000` 🎉
 
-## Setup & Development
-1. Clone repository:
-   ```bash
-   git clone <repo-url>
-   cd react-fastapi-pyodide
-   ```
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Start development server (Pyodide mode):
-   ```bash
-   npm run dev:pyodide
-   ```
-4. Open http://localhost:5173 in your browser.
+## 📁 Project Structure
 
-## Building & Deployment
-- **Build for production** (Pyodide):
-  ```bash
-  npm run build:pyodide
-  ```
-- **Serve production build**:
-  ```bash
-  npm run prod:pyodide
-  ```
-- **GitHub Pages deployment**:
-  ```bash
-  npm run build:gh-pages
-  npm run dev:gh-pages  # preview
-  ```
-
-## Pyodide Integration
-1. `npm run copy-api` copies Python files from `src/backend/` to `public/backend/`.
-2. `PyodideEngine` loads modules into IDBFS (`/persist/api`).
-3. `/persist` is added to Python `sys.path`, enabling absolute imports (`import api.models.models`).
-4. Python packages (FastAPI, SQLAlchemy, etc.) are installed via `micropip` and cached.
-
-## API Reference
-Once the app initializes, you can:
-- View the Swagger UI at `/api/docs` (handled in the browser).
-- Call endpoints under `/api/backend/v1/` (e.g., `/api/backend/v1/users`).
-
-Example endpoints:
-```http
-GET  /api/backend/v1/users
-POST /api/backend/v1/users
-GET  /api/backend/v1/users/{user_id}
-PUT  /api/backend/v1/users/{user_id}
-DELETE /api/backend/v1/users/{user_id}
+```
+├── apps/
+│   ├── frontend/          # React app with Vite
+│   └── backend/           # FastAPI application
+├── packages/
+│   ├── pyodide-bridge-ts/ # TypeScript bridge package
+│   └── pyodide-bridge-py/ # Python bridge package
+└── scripts/               # Build and generation scripts
 ```
 
-## Frontend Overview
-- **`PyodideFileApp`**: Loads a Python file (main FastAPI app) and runs it.
-- **`PyodideEndpointComponent`**: Renders a single endpoint result.
-- **`PyodideSwaggerUI`**: Interactive API docs powered by Swagger UI.
-- **`PyodideEngine`**: Manages Pyodide initialization, file loading, and endpoint registration.
+## 🛠️ Development
 
-## Contributing
-1. Fork the repository and create your feature branch.
-2. Make changes in `src/backend/` for Python or `src/frontend/` for React.
-3. No emojis; use Lucide icons for UI.
-4. Update tests and documentation if needed.
-5. Submit a pull request.
+### Backend
+```bash
+bun run dev:backend        # Start FastAPI server
+```
 
----
+### Frontend
+```bash
+bun run dev:frontend       # Start React dev server
+bun run generate:pages:enhanced  # Generate pages from API
+```
 
-Thank you for using **React FastAPI Pyodide**! If you encounter any issues or have suggestions, please open an issue on GitHub.
+### Page Generation
+
+**Enhanced Workflow** (Recommended):
+```bash
+bun run generate:pages:enhanced  # Full: client + pages
+bun run generate:pages:quick     # Quick: pages only
+```
+
+**Original Generator**:
+```bash
+bun run generate:pages          # Python-based generator
+```
+
+## 📄 Generated Pages
+
+The enhanced generator creates React pages from your FastAPI endpoints:
+
+- **UsersPage** → `/users`, `/users/:id`
+- **PostsPage** → `/posts`, `/posts/:id` 
+- **DashboardPage** → `/dashboard`
+- **AnalyticsPage** → `/analytics`
+
+### Features:
+- ✅ **Type-safe API calls** using generated client
+- ✅ **List + Detail views** with React Router
+- ✅ **Loading states** and error handling
+- ✅ **Modern UI** with Tailwind CSS
+
+## 🔧 Build & Deploy
+
+```bash
+# Build everything
+bun run build
+
+# Build individual parts
+bun run build:frontend
+bun run build:backend
+bun run build:packages
+```
+
+## 📚 Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| **Frontend** | React, TypeScript, Vite, Tailwind CSS |
+| **Backend** | FastAPI, Python, SQLAlchemy |
+| **Bridge** | Pyodide, Custom TypeScript/Python packages |
+| **API Client** | `@hey-api/openapi-ts`, React Query |
+| **Build** | Bun, Vite |
+
+## 🎯 Key Scripts
+
+| Command | Description |
+|---------|-------------|
+| `bun run dev:frontend` | Start React dev server |
+| `bun run dev:backend` | Start FastAPI server |
+| `bun run generate:pages:enhanced` | Generate pages from API |
+| `bun run gen:client` | Generate TypeScript client |
+| `bun run build` | Build for production |
+| `bun run test` | Run all tests |
+
+## 📖 Documentation
+
+- **Page Generation**: See `PAGE_GENERATION_APPROACHES.md`
+- **API Docs**: `http://localhost:8000/docs` (when backend running)
+- **Package Docs**: Individual `README.md` in each package
+
+## 🤝 Development Workflow
+
+1. **Start backend**: `bun run dev:backend`
+2. **Generate pages**: `bun run generate:pages:enhanced` 
+3. **Start frontend**: `bun run dev:frontend`
+4. **Make changes** to backend APIs
+5. **Regenerate pages**: `bun run generate:pages:quick`
+
+## 📦 Packages
+
+### Frontend Dependencies
+- `react` - UI framework
+- `react-router-dom` - Routing
+- `react-query` - Data fetching
+- `@hey-api/openapi-ts` - API client generation
+
+### Backend Dependencies  
+- `fastapi` - Web framework
+- `uvicorn` - ASGI server
+- `sqlalchemy` - Database ORM
+- `pydantic` - Data validation
+
+## 🔍 Troubleshooting
+
+**Page generation fails?**
+- Ensure backend is running on `http://localhost:8000`
+- Check OpenAPI schema at `http://localhost:8000/openapi.json`
+
+**TypeScript errors?**  
+- Run `bun run generate:pages:enhanced` to regenerate client
+- Check `apps/frontend/src/client/` for generated types
+
+**Build fails?**
+- Ensure all dependencies: `bun install`
+- Clean build: `rm -rf node_modules/.cache`
+
+## 📄 License
+
+MIT License - see `LICENSE` file.

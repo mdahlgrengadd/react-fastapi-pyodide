@@ -1,9 +1,8 @@
-// Auto-generated page component
+// Auto-generated page component using generated TypeScript client
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useAPIQuery } from 'react-router-fastapi';
-
-
+import { getSystemInfo } from '../client';
+import { useQuery } from 'react-query';
 
 export const SystemPage: React.FC = () => {
   return <SystemList />;
@@ -14,16 +13,11 @@ const SystemList: React.FC = () => {
     data: system,
     isLoading,
     error
-  } = useAPIQuery<any[]>(
-    ['system'],
-    '/api/v1/system/async-demo'
-  );
+  } = useQuery(['system'], () => getSystemInfo());
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto p-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+      <div className="max-w-6xl mx-auto p-8">        <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">System Management</h1>
             <p className="text-gray-600">Manage system data and entries</p>
@@ -34,10 +28,7 @@ const SystemList: React.FC = () => {
           >
             ← Home
           </Link>
-        </div>
-
-        {/* Loading State */}
-        {isLoading && (
+        </div>        {isLoading ? (
           <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="animate-pulse space-y-4">
               {[...Array(5)].map((_, i) => (
@@ -45,20 +36,18 @@ const SystemList: React.FC = () => {
               ))}
             </div>
           </div>
-        )}
+        ) : null}
 
-        {/* Error State */}
-        {error && (
+        {error ? (
           <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <p className="text-red-800 font-medium">Failed to load system</p>
               <p className="text-red-600 text-sm mt-1">{error instanceof Error ? error.message : 'Unknown error'}</p>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {/* Data */}
-        {system && Array.isArray(system) && system.length > 0 && (
+        {system && Array.isArray(system) && system.length > 0 ? (
           <div className="bg-white rounded-lg shadow-lg overflow-hidden">
             <div className="p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">System</h2>
@@ -82,14 +71,15 @@ const SystemList: React.FC = () => {
                           View Details
                         </Link>
                       )}
-                    </div>
-                  </div>
+                    </div>                  </div>
                 ))}
               </div>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
 };
+
+

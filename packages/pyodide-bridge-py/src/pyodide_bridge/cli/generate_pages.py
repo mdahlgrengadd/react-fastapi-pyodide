@@ -29,42 +29,42 @@ def setup_logging(debug: bool = False) -> None:
 
 class PageGenerator:
     """Generate React page components from OpenAPI schema."""
-    
+
     def __init__(self, schema: Dict[str, Any], output_dir: Path):
         self.schema = schema
         self.output_dir = output_dir
         self.paths = schema.get("paths", {})
         self.components = schema.get("components", {})
         self.schemas = self.components.get("schemas", {})
-        
+
     def generate_all_pages(self) -> List[str]:
         """Generate all page components and return list of generated files."""
         generated_files = []
-        
+
         # Group endpoints by logical domains
         domains = self._group_endpoints_by_domain()
-        
+
         for domain, endpoints in domains.items():
             if domain and endpoints:
                 file_path = self._generate_domain_page(domain, endpoints)
                 if file_path:
                     generated_files.append(str(file_path))
-                    
+
         # Generate index file
         index_path = self._generate_index_file(domains.keys())
         if index_path:
             generated_files.append(str(index_path))
-            
+
         return generated_files
-    
+
     def _group_endpoints_by_domain(self) -> Dict[str, List[Dict[str, Any]]]:
         """Group API endpoints by logical domain based on path structure."""
         domains: Dict[str, List[Dict[str, Any]]] = {}
-        
+
         for path, methods in self.paths.items():
             # Extract domain from path (e.g., /api/v1/users -> users)
             domain = self._extract_domain_from_path(path)
-            
+
             for method, spec in methods.items():
                 if method.upper() in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']:
                     endpoint_info = {
@@ -78,52 +78,53 @@ class PageGenerator:
                         'responses': spec.get('responses', {}),
                         'request_body': spec.get('requestBody'),
                     }
-                    
+
                     if domain not in domains:
                         domains[domain] = []
-                    domains[domain].append(endpoint_info)                    
+                    domains[domain].append(endpoint_info)
         return domains
-    
+
     def _extract_domain_from_path(self, path: str) -> str:
         """Extract domain name from API path."""
         # Remove API prefix and version
         clean_path = re.sub(r'^/api/v\d+/', '', path)
         clean_path = re.sub(r'^/', '', clean_path)
-        
+
         # Get first path segment
         segments = clean_path.split('/')
         if segments and segments[0]:
             domain = segments[0]
             # Remove path parameters
-            domain = re.sub(r'\{[^}]+\}', '', domain)            # Clean up domain name: remove hyphens and special chars
+            # Clean up domain name: remove hyphens and special chars
+            domain = re.sub(r'\{[^}]+\}', '', domain)
             domain = re.sub(r'[^a-zA-Z0-9]', '', domain)
             return domain.strip().lower()
-        
+
         return 'general'
-    
+
     def _generate_domain_page(self, domain: str, endpoints: List[Dict[str, Any]]) -> Optional[Path]:
         """Generate a React page component for a domain."""
         if not endpoints:
             return None
-        
+
         # Determine primary endpoints
         list_endpoint = self._find_list_endpoint(endpoints)
         detail_endpoint = self._find_detail_endpoint(endpoints)
         create_endpoint = self._find_create_endpoint(endpoints)
-        
+
         # Generate TypeScript interfaces
         interfaces = self._generate_interfaces_for_domain(domain, endpoints)
-        
+
         # Generate component
         component_name = f"{domain.capitalize()}Page"
         file_name = f"{component_name}.tsx"
         file_path = self.output_dir / file_name
-        
+
         # Skip if file already exists (preserve manual pages)
         if file_path.exists():
             logger.info(f"Skipping {file_path} - file already exists")
             return None
-        
+
         component_code = self._generate_page_component(
             domain=domain,
             component_name=component_name,
@@ -133,46 +134,46 @@ class PageGenerator:
             create_endpoint=create_endpoint,
             interfaces=interfaces
         )
-        
+
         # Write file
         file_path.write_text(component_code, encoding='utf-8')
         logger.info(f"Generated {file_path}")
-        
+
         return file_path
-    
+
     def _find_list_endpoint(self, endpoints: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """Find the main list/collection endpoint."""
         for endpoint in endpoints:
-            if (endpoint['method'] == 'GET' and 
+            if (endpoint['method'] == 'GET' and
                 not self._has_path_parameters(endpoint['path']) and
                 not endpoint['path'].endswith('/info') and
-                not endpoint['path'].endswith('/status')):
+                    not endpoint['path'].endswith('/status')):
                 return endpoint
         return None
-    
+
     def _find_detail_endpoint(self, endpoints: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """Find the detail/single item endpoint."""
         for endpoint in endpoints:
-            if (endpoint['method'] == 'GET' and 
-                self._has_path_parameters(endpoint['path'])):
+            if (endpoint['method'] == 'GET' and
+                    self._has_path_parameters(endpoint['path'])):
                 return endpoint
         return None
-    
+
     def _find_create_endpoint(self, endpoints: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """Find the create endpoint."""
         for endpoint in endpoints:
             if endpoint['method'] == 'POST':
                 return endpoint
         return None
-    
+
     def _has_path_parameters(self, path: str) -> bool:
         """Check if path has parameters like {id}."""
         return '{' in path and '}' in path
-    
+
     def _generate_interfaces_for_domain(self, domain: str, endpoints: List[Dict[str, Any]]) -> str:
         """Generate TypeScript interfaces for domain models."""
         interfaces = []
-        
+
         # Find response schemas
         schemas_used = set()
         for endpoint in endpoints:
@@ -181,17 +182,19 @@ class PageGenerator:
                     content = response.get('content', {})
                     for media_type, media_spec in content.items():
                         if 'schema' in media_spec:
-                            schema_ref = self._extract_schema_ref(media_spec['schema'])
+                            schema_ref = self._extract_schema_ref(
+                                media_spec['schema'])
                             if schema_ref:
                                 schemas_used.add(schema_ref)
           # Generate interfaces for used schemas
         for schema_name in schemas_used:
             if schema_name in self.schemas:
-                interface = self._generate_typescript_interface(schema_name, self.schemas[schema_name])
+                interface = self._generate_typescript_interface(
+                    schema_name, self.schemas[schema_name])
                 interfaces.append(interface)
-        
+
         return '\n\n'.join(interfaces)
-    
+
     def _extract_schema_ref(self, schema: Dict[str, Any]) -> Optional[str]:
         """Extract schema reference name."""
         if '$ref' in schema:
@@ -203,24 +206,24 @@ class PageGenerator:
             if ref.startswith('#/components/schemas/'):
                 return ref.split('/')[-1]
         return None
-    
+
     def _generate_typescript_interface(self, name: str, schema: Dict[str, Any]) -> str:
         """Generate TypeScript interface from JSON schema."""
         properties = schema.get('properties', {})
         required = set(schema.get('required', []))
-        
+
         fields = []
         for prop_name, prop_schema in properties.items():
             field_type = self._json_schema_to_typescript_type(prop_schema)
             optional_marker = '' if prop_name in required else '?'
             fields.append(f"  {prop_name}{optional_marker}: {field_type};")
-        
+
         return f"interface {name} {{\n" + '\n'.join(fields) + "\n}"
-    
+
     def _json_schema_to_typescript_type(self, schema: Dict[str, Any]) -> str:
         """Convert JSON schema type to TypeScript type."""
         schema_type = schema.get('type', 'any')
-        
+
         if schema_type == 'string':
             return 'string'
         elif schema_type == 'number' or schema_type == 'integer':
@@ -237,9 +240,9 @@ class PageGenerator:
             ref = schema['$ref']
             if ref.startswith('#/components/schemas/'):
                 return ref.split('/')[-1]
-        
+
         return 'any'
-    
+
     def _generate_page_component(
         self,
         domain: str,
@@ -251,19 +254,19 @@ class PageGenerator:
         interfaces: str
     ) -> str:
         """Generate the React page component code."""
-        
+
         # Determine primary data type
         data_type = self._infer_data_type(domain, list_endpoint)
-          # Generate imports
+        # Generate imports
         imports = [
             "import React from 'react';",
             "import { Link } from 'react-router-dom';",
             "import { useAPIQuery } from 'react-router-fastapi';"
         ]
-          # Add useParams only if we need it
+        # Add useParams only if we need it
         if list_endpoint and detail_endpoint:
             imports[1] = "import { Link, useParams } from 'react-router-dom';"
-        
+
         component_parts = [
             '// Auto-generated page component',
             *imports,
@@ -272,7 +275,7 @@ class PageGenerator:
             '',
             f"export const {component_name}: React.FC = () => {{",
         ]
-        
+
         # Only show routing if we have both list and detail endpoints
         if list_endpoint and detail_endpoint:
             component_parts.extend([
@@ -313,22 +316,24 @@ class PageGenerator:
                 "};",
                 ""
             ])
-        
+
         # Generate list component
         if list_endpoint:
-            component_parts.extend(self._generate_list_component(domain, list_endpoint, data_type))
-        
-        # Generate detail component  
+            component_parts.extend(self._generate_list_component(
+                domain, list_endpoint, data_type))
+
+        # Generate detail component
         if detail_endpoint:
-            component_parts.extend(self._generate_detail_component(domain, detail_endpoint, data_type))
-        
+            component_parts.extend(self._generate_detail_component(
+                domain, detail_endpoint, data_type))
+
         return '\n'.join(component_parts)
-    
+
     def _infer_data_type(self, domain: str, list_endpoint: Optional[Dict[str, Any]]) -> str:
         """Infer the primary data type for the domain."""
         if not list_endpoint:
             return 'any'
-            
+
         # Look at successful response schema
         responses = list_endpoint.get('responses', {})
         for response_code, response in responses.items():
@@ -336,26 +341,28 @@ class PageGenerator:
                 content = response.get('content', {})
                 for media_type, media_spec in content.items():
                     if 'schema' in media_spec:
-                        schema_ref = self._extract_schema_ref(media_spec['schema'])
+                        schema_ref = self._extract_schema_ref(
+                            media_spec['schema'])
                         if schema_ref:
                             return schema_ref
                         elif media_spec['schema'].get('type') == 'array':
-                            items_ref = self._extract_schema_ref(media_spec['schema'].get('items', {}))
+                            items_ref = self._extract_schema_ref(
+                                media_spec['schema'].get('items', {}))
                             if items_ref:
-                                return f"{items_ref}[]"        
+                                return f"{items_ref}[]"
         return 'any'
-    
+
     def _generate_list_component(self, domain: str, endpoint: Dict[str, Any], data_type: str) -> List[str]:
         """Generate list component code."""
         component_name = f"{domain.capitalize()}List"
         query_key = domain  # Use singular form for query key
         endpoint_path = endpoint['path']
-        
+
         # Determine if it's an array response
         is_array = data_type.endswith('[]')
         hook_type = data_type if is_array else f"{data_type}[]"
         data_var = domain  # Use singular form for data variable
-        
+
         return [
             f"const {component_name}: React.FC = () => {{",
             "  const {",
@@ -405,16 +412,16 @@ class PageGenerator:
             "          </div>",
             "        )}",
             "",        "        {/* Data */}",
-        f"        {{{data_var} && Array.isArray({data_var}) && {data_var}.length > 0 && (",
-        "          <div className=\"bg-white rounded-lg shadow-lg overflow-hidden\">",
-        "            <div className=\"p-6\">",
-        f"              <h2 className=\"text-xl font-semibold text-gray-900 mb-4\">{domain.capitalize()}</h2>",
-        "              <div className=\"space-y-4\">",
-        f"                {{{data_var}.map((item: any, index: number) => (",
+            f"        {{{data_var} && Array.isArray({data_var}) && {data_var}.length > 0 && (",
+            "          <div className=\"bg-white rounded-lg shadow-lg overflow-hidden\">",
+            "            <div className=\"p-6\">",
+            f"              <h2 className=\"text-xl font-semibold text-gray-900 mb-4\">{domain.capitalize()}</h2>",
+            "              <div className=\"space-y-4\">",
+            f"                {{{data_var}.map((item: any, index: number) => (",
             "                  <div key={item.id || index} className=\"border rounded-lg p-4 hover:bg-gray-50\">",
             "                    <div className=\"flex items-center justify-between\">",
             "                      <div>",                        "                        <h3 className=\"font-medium text-gray-900\">",
-                        f"                          {{item.name || item.title || item.email || `{domain.capitalize()} ${{item.id || index + 1}}`}}",
+            f"                          {{item.name || item.title || item.email || `{domain.capitalize()} ${{item.id || index + 1}}`}}",
             "                        </h3>",
             "                        {item.description && (",
             "                          <p className=\"text-gray-600 text-sm mt-1\">{item.description}</p>",
@@ -440,19 +447,20 @@ class PageGenerator:
             "};",
             ""
         ]
-    
+
     def _generate_detail_component(self, domain: str, endpoint: Dict[str, Any], data_type: str) -> List[str]:
         """Generate detail component code."""
         component_name = f"{domain.capitalize()}Detail"
         base_type = data_type.replace('[]', '')
         endpoint_path = endpoint['path']
         data_var = domain  # Use domain as the data variable name
-        
+
         # Extract path parameter name (e.g., {user_id} from /api/v1/users/{user_id})
         import re
         path_params = re.findall(r'\{([^}]+)\}', endpoint_path)
-        path_param = path_params[0] if path_params else 'id'  # fallback to 'id'
-        
+        # fallback to 'id'
+        path_param = path_params[0] if path_params else 'id'
+
         return [
             f"const {component_name}: React.FC<{{ id: string }}> = ({{ id }}) => {{",
             "  const {",
@@ -510,7 +518,7 @@ class PageGenerator:
             "          </div>",
             "        )}",
             "",        "        {/* Data */}",
-        f"        {{{domain} && (",
+            f"        {{{domain} && (",
             "          <div className=\"bg-white rounded-lg shadow-lg p-6\">",
             f"            <h2 className=\"text-xl font-semibold text-gray-900 mb-4\">{domain.capitalize()} Information</h2>",
             "            <div className=\"grid md:grid-cols-2 gap-6\">",
@@ -532,12 +540,12 @@ class PageGenerator:
             "  );",
             "};",            ""
         ]
-    
+
     def _generate_index_file(self, domains: Set[str]) -> Optional[Path]:
         """Generate index.ts file that exports all page components."""
         if not domains:
             return None
-        
+
         # Find all existing page components in the output directory
         existing_components = []
         if self.output_dir.exists():
@@ -545,23 +553,25 @@ class PageGenerator:
                 component_name = tsx_file.stem  # Remove .tsx extension
                 if component_name.endswith('Page'):
                     existing_components.append(component_name)
-        
+
         # Sort for consistent output
         existing_components.sort()
-        
+
         if not existing_components:
             return None
-            
+
         exports = []
         for component_name in existing_components:
-            exports.append(f"export {{ {component_name} }} from './{component_name}';")
-        
-        content = "// Auto-generated page component exports\n" + '\n'.join(exports) + '\n'
-        
+            exports.append(
+                f"export {{ {component_name} }} from './{component_name}';")
+
+        content = "// Auto-generated page component exports\n" + \
+            '\n'.join(exports) + '\n'
+
         index_path = self.output_dir / 'index.ts'
         index_path.write_text(content, encoding='utf-8')
         logger.info(f"Generated {index_path}")
-        
+
         return index_path
 
 
@@ -569,7 +579,7 @@ def load_openapi_schema(backend_path: Path) -> Dict[str, Any]:
     """Load OpenAPI schema from FastAPI backend."""
     # Add backend to Python path
     sys.path.insert(0, str(backend_path.resolve()))
-    
+
     try:
         # Import the FastAPI app - adjust import based on structure
         # First try the standard structure: backend_path/app/app_main.py
@@ -586,23 +596,26 @@ def load_openapi_schema(backend_path: Path) -> Dict[str, Any]:
                     sys.path.insert(0, str(backend_src.resolve()))
                     from app.app_main import app
                 else:
-                    raise ImportError("Could not find app.app_main or app_main module")
+                    raise ImportError(
+                        "Could not find app.app_main or app_main module")
           # Generate OpenAPI schema
         schema = app.openapi()
         return schema
-        
+
     except ImportError as e:
         logger.error(f"Failed to import FastAPI app: {e}")
-        logger.error("Make sure the backend is properly configured with a 'app' variable in app_main.py")
+        logger.error(
+            "Make sure the backend is properly configured with a 'app' variable in app_main.py")
         logger.error(f"Backend path: {backend_path}")
-        
+
         # List available Python files for debugging
         if backend_path.exists():
             py_files = list(backend_path.glob("**/*.py"))
-            logger.error(f"Available Python files: {[str(f.relative_to(backend_path)) for f in py_files[:10]]}")
+            logger.error(
+                f"Available Python files: {[str(f.relative_to(backend_path)) for f in py_files[:10]]}")
         else:
             logger.error(f"Backend path does not exist!")
-        
+
         raise
     except Exception as e:
         logger.error(f"Failed to generate OpenAPI schema: {e}")
@@ -613,7 +626,7 @@ def load_openapi_schema(backend_path: Path) -> Dict[str, Any]:
         backend_src = backend_path / "src"
         if backend_src.exists():
             paths_to_remove.append(str(backend_src.resolve()))
-        
+
         for path in paths_to_remove:
             if path in sys.path:
                 sys.path.remove(path)
@@ -651,10 +664,10 @@ def main() -> None:
         action='store_true',
         help='Show what would be generated without writing files'
     )
-    
+
     args = parser.parse_args()
     setup_logging(args.debug)
-    
+
     try:
         # Load OpenAPI schema
         if args.schema_file:
@@ -662,16 +675,17 @@ def main() -> None:
             with open(args.schema_file, 'r', encoding='utf-8') as f:
                 schema = json.load(f)
         else:
-            logger.info(f"Loading OpenAPI schema from backend at {args.backend_path}")
+            logger.info(
+                f"Loading OpenAPI schema from backend at {args.backend_path}")
             schema = load_openapi_schema(args.backend_path)
-        
+
         logger.info(f"Found {len(schema.get('paths', {}))} API endpoints")
-        
+
         if args.dry_run:
             logger.info("Dry run mode - analyzing schema structure...")
             generator = PageGenerator(schema, args.output_dir)
             domains = generator._group_endpoints_by_domain()
-            
+
             print("\nDomains found:")
             for domain, endpoints in domains.items():
                 print(f"  {domain}: {len(endpoints)} endpoints")
@@ -679,24 +693,26 @@ def main() -> None:
                     print(f"    {endpoint['method']} {endpoint['path']}")
                 if len(endpoints) > 3:
                     print(f"    ... and {len(endpoints) - 3} more")
-            
-            print(f"\nWould generate {len([d for d in domains.keys() if d and d != 'general'])} page components in {args.output_dir}")
+
+            print(
+                f"\nWould generate {len([d for d in domains.keys() if d and d != 'general'])} page components in {args.output_dir}")
             return
-        
+
         # Create output directory
         args.output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Generate pages
         generator = PageGenerator(schema, args.output_dir)
         generated_files = generator.generate_all_pages()
-        
+
         if generated_files:
-            logger.info(f"Successfully generated {len(generated_files)} files:")
+            logger.info(
+                f"Successfully generated {len(generated_files)} files:")
             for file_path in generated_files:
                 logger.info(f"  {file_path}")
         else:
             logger.warning("No page components were generated")
-            
+
     except Exception as e:
         logger.error(f"Failed to generate page components: {e}")
         if args.debug:

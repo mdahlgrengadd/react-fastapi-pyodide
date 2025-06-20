@@ -1,32 +1,26 @@
-// Auto-generated page component
+// Auto-generated page component using generated TypeScript client
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useAPIQuery } from 'react-router-fastapi';
+import { asyncSimulation } from '../client';
+import { useQuery } from 'react-query';
 
-
-
-export const AsyncsimulationPage: React.FC = () => {
-  return <AsyncsimulationList />;
+export const AsyncPage: React.FC = () => {
+  return <AsyncList />;
 };
 
-const AsyncsimulationList: React.FC = () => {
+const AsyncList: React.FC = () => {
   const {
-    data: asyncsimulation,
+    data: async,
     isLoading,
     error
-  } = useAPIQuery<any[]>(
-    ['asyncsimulation'],
-    '/api/v1/async-simulation'
-  );
+  } = useQuery(['async'], () => asyncSimulation());
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto p-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+      <div className="max-w-6xl mx-auto p-8">        <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Asyncsimulation Management</h1>
-            <p className="text-gray-600">Manage asyncsimulation data and entries</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Async Management</h1>
+            <p className="text-gray-600">Manage async data and entries</p>
           </div>
           <Link
             to="/"
@@ -34,10 +28,7 @@ const AsyncsimulationList: React.FC = () => {
           >
             ← Home
           </Link>
-        </div>
-
-        {/* Loading State */}
-        {isLoading && (
+        </div>        {isLoading ? (
           <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="animate-pulse space-y-4">
               {[...Array(5)].map((_, i) => (
@@ -45,30 +36,28 @@ const AsyncsimulationList: React.FC = () => {
               ))}
             </div>
           </div>
-        )}
+        ) : null}
 
-        {/* Error State */}
-        {error && (
+        {error ? (
           <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-red-800 font-medium">Failed to load asyncsimulation</p>
+              <p className="text-red-800 font-medium">Failed to load async</p>
               <p className="text-red-600 text-sm mt-1">{error instanceof Error ? error.message : 'Unknown error'}</p>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {/* Data */}
-        {asyncsimulation && Array.isArray(asyncsimulation) && asyncsimulation.length > 0 && (
+        {async && Array.isArray(async) && async.length > 0 ? (
           <div className="bg-white rounded-lg shadow-lg overflow-hidden">
             <div className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Asyncsimulation</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Async</h2>
               <div className="space-y-4">
-                {asyncsimulation.map((item: any, index: number) => (
+                {async.map((item: any, index: number) => (
                   <div key={item.id || index} className="border rounded-lg p-4 hover:bg-gray-50">
                     <div className="flex items-center justify-between">
                       <div>
                         <h3 className="font-medium text-gray-900">
-                          {item.name || item.title || item.email || `Asyncsimulation ${item.id || index + 1}`}
+                          {item.name || item.title || item.email || `Async ${item.id || index + 1}`}
                         </h3>
                         {item.description && (
                           <p className="text-gray-600 text-sm mt-1">{item.description}</p>
@@ -76,20 +65,21 @@ const AsyncsimulationList: React.FC = () => {
                       </div>
                       {item.id && (
                         <Link
-                          to={`/asyncsimulation/${item.id}`}
+                          to={`/async/${item.id}`}
                           className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
                         >
                           View Details
                         </Link>
                       )}
-                    </div>
-                  </div>
+                    </div>                  </div>
                 ))}
               </div>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
 };
+
+

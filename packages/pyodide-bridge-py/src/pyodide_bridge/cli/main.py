@@ -187,7 +187,8 @@ def generate_pages_with_args(args):
             with open(args.schema_file, 'r', encoding='utf-8') as f:
                 schema = json.load(f)
         else:
-            logger.info(f"Loading OpenAPI schema from backend at {backend_path}")
+            logger.info(
+                f"Loading OpenAPI schema from backend at {backend_path}")
             schema = load_openapi_schema(backend_path)
 
         logger.info(f"Found {len(schema.get('paths', {}))} API endpoints")
@@ -205,7 +206,8 @@ def generate_pages_with_args(args):
                 if len(endpoints) > 3:
                     print(f"    ... and {len(endpoints) - 3} more")
 
-            print(f"\nWould generate {len([d for d in domains.keys() if d and d != 'general'])} page components in {output_dir}")
+            print(
+                f"\nWould generate {len([d for d in domains.keys() if d and d != 'general'])} page components in {output_dir}")
             return
 
         # Create output directory
@@ -216,7 +218,8 @@ def generate_pages_with_args(args):
         generated_files = generator.generate_all_pages()
 
         if generated_files:
-            logger.info(f"Successfully generated {len(generated_files)} files:")
+            logger.info(
+                f"Successfully generated {len(generated_files)} files:")
             for file_path in generated_files:
                 logger.info(f"  {file_path}")
         else:

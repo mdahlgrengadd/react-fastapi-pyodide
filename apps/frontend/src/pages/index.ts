@@ -1,15 +1,13 @@
-// Auto-generated page component exports
+// Auto-generated exports - manual exports are preserved
+
 export { AnalyticsPage } from './AnalyticsPage';
-export { AsyncdatastreamPage } from './AsyncdatastreamPage';
-export { AsyncmonitorPage } from './AsyncmonitorPage';
-export { AsyncsimulationPage } from './AsyncsimulationPage';
-export { AsyncworkflowPage } from './AsyncworkflowPage';
+export { AsyncPage } from './AsyncPage';
 export { DashboardPage } from './DashboardPage';
-export { GeneralPage } from './GeneralPage';
-export { HealthasyncPage } from './HealthasyncPage';
-export { LivemetricsPage } from './LivemetricsPage';
+export { DashboardsPage } from './DashboardsPage';
+export { HealthPage } from './HealthPage';
+export { LivePage } from './LivePage';
 export { PersistencePage } from './PersistencePage';
 export { PostsPage } from './PostsPage';
-export { StreamprogressPage } from './StreamprogressPage';
+export { StreamPage } from './StreamPage';
 export { SystemPage } from './SystemPage';
 export { UsersPage } from './UsersPage';

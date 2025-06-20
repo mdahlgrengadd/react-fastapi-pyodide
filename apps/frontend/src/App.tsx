@@ -8,13 +8,6 @@ import { FastAPIRouter } from 'react-router-fastapi';
 import { DashboardPage, PostsPage, SystemPage, UsersPage } from './pages';
 
 import type { RouteConfig } from "react-router-fastapi";
-interface ApiEndpoint {
-  operationId: string;
-  path: string;
-  method: string;
-  summary?: string;
-  tags?: string[];
-}
 
 function App() {
   const [bridge] = useState(

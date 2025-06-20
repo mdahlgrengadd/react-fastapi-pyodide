@@ -127,15 +127,16 @@ def enable(debug: int | None = None) -> None:  # noqa: D401 – imperative style
             """Override include_router to register routes from included routers."""
             # Call the original include_router first
             result = super().include_router(router, **kwargs)
-            
+
             # Extract and register routes from the router
             self._extract_routes_from_router(router, **kwargs)
-            
+
             return result
 
         def _extract_routes_from_router(self, router, prefix: str = "", **kwargs):
             """Extract routes from an APIRouter and register them."""
-            router_prefix = kwargs.get("prefix", "") or getattr(router, "prefix", "") or ""
+            router_prefix = kwargs.get("prefix", "") or getattr(
+                router, "prefix", "") or ""
             full_prefix = prefix + router_prefix
 
             if hasattr(router, "routes"):
@@ -143,13 +144,16 @@ def enable(debug: int | None = None) -> None:  # noqa: D401 – imperative style
                     # Handle nested routers (Mount objects with sub-routers)
                     if hasattr(route, "app") and hasattr(route.app, "routes"):
                         # This is a nested router, recurse into it
-                        nested_prefix = full_prefix + getattr(route, "path", "")
-                        self._extract_routes_from_router(route.app, nested_prefix, **kwargs)
+                        nested_prefix = full_prefix + \
+                            getattr(route, "path", "")
+                        self._extract_routes_from_router(
+                            route.app, nested_prefix, **kwargs)
                     elif hasattr(route, "methods") and hasattr(route, "endpoint"):
                         # This is a regular route
                         for method in route.methods:
                             if method in ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]:
-                                operation_id = getattr(route, "operation_id", None) or route.endpoint.__name__
+                                operation_id = getattr(
+                                    route, "operation_id", None) or route.endpoint.__name__
                                 full_path = full_prefix + route.path
 
                                 _register_route(

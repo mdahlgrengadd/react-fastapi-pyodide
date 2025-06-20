@@ -1,25 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 
-// We'll define the interfaces here to avoid TypeScript import issues
-interface FetchInterceptorConfig {
-  apiPrefix?: string;
-  baseUrl?: string;
-  interceptRelative?: boolean;
-  routeMatcher?: (url: string) => boolean;
-  debug?: boolean;
-}
-
-// Simplified types for the hook
-interface Bridge {
-  on: (event: string, callback: () => void) => void;
-  off: (event: string, callback: () => void) => void;
-}
-
-interface FetchInterceptor {
-  updateEndpoints: () => void;
-  restore: () => void;
-}
-
 export interface UseFetchInterceptorOptions {
   /** API path prefix to intercept (e.g., '/api') */
   apiPrefix?: string;
