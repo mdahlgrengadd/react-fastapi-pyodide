@@ -309,7 +309,13 @@ print("Basic bridge infrastructure ready")
 import sys
 import os
 
-# Add the backend root path to Python path (not just the app path)
+# Add the root path to Python path since files are loaded at root level
+root_path = "/"
+if root_path not in sys.path:
+    sys.path.insert(0, root_path)
+    print(f"Added {root_path} to Python path")
+
+# Also add the backend path for compatibility
 backend_root = "/backend"
 if backend_root not in sys.path:
     sys.path.insert(0, backend_root)
@@ -663,6 +669,34 @@ call_endpoint()
    */
   isReady(): boolean {
     return this.isInitialized && this.backendLoaded;
+  }
+
+  /**
+   * Load a file into the Pyodide filesystem
+   */
+  async loadFile(path: string, content: string): Promise<void> {
+    if (!this.pyodide) {
+      throw new Error("Pyodide not initialized");
+    }
+    
+    // Ensure directory exists
+    const dirPath = path.substring(0, path.lastIndexOf('/'));
+    if (dirPath) {
+      this.pyodide.runPython(`
+import os
+os.makedirs("${dirPath}", exist_ok=True)
+      `);
+    }
+    
+    this.pyodide.FS.writeFile(path, content);
+    this._log(`Loaded file: ${path}`);
+  }
+
+  /**
+   * Get the Pyodide instance (for advanced usage)
+   */
+  getPyodide(): PyodideInterface | null {
+    return this.pyodide;
   }
 
   /**

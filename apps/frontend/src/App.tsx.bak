@@ -65,7 +65,7 @@ function App() {
             const response = await fetch(`/backend/${file}`);
             if (response.ok) {
               const content = await response.text();
-              await bridge.loadFile(`/${file}`, content);
+              bridge.pyodide!.FS.writeFile(`/${file}`, content);
             }
           } catch (e) {
             console.warn(`Failed to load file ${file}:`, e);
@@ -73,7 +73,7 @@ function App() {
         }
 
         setStatus("Starting FastAPI server…");
-        await bridge.loadBackend("/backend", "directory");
+        await bridge.loadModule("/app_main.py", { name: "app" });
 
         setStatus("Setting up API interceptor…");
         const { FetchInterceptor } = await import("pyodide-bridge-ts");

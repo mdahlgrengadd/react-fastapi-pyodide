@@ -12,6 +12,7 @@ export interface PyodideInterface {
     mkdirTree: (path: string) => void;
     mount: (filesystem: unknown, options: unknown, mountpoint: string) => void;
     syncfs: (populate: boolean, callback: (err?: Error) => void) => void;
+    writeFile: (path: string, content: string) => void;
     filesystems: {
       IDBFS: unknown;
     };
