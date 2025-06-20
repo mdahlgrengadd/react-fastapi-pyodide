@@ -1,8 +1,8 @@
 import './App.css';
 
 import { Bridge, FetchInterceptor } from 'pyodide-bridge-ts';
-import { FastAPIRouter } from '../../../packages/react-router-fastapi';
-import type { RouteConfig } from '../../../packages/react-router-fastapi';
+import { FastAPIRouter } from 'react-router-fastapi';
+import type { RouteConfig } from 'react-router-fastapi';
 import { useEffect, useState, useRef } from 'react';
 
 // Import page components
@@ -132,7 +132,7 @@ function App() {
         
         // Now create the API client AFTER the interceptor is set up
         console.log('🔧 Creating API client...');
-        const { createAPIClient } = await import('../../../packages/react-router-fastapi');
+        const { createAPIClient } = await import('react-router-fastapi');
         createAPIClient({
           baseURL: 'http://localhost:8000',
           tokenKey: 'access_token',
