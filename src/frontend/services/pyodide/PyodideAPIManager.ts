@@ -64,14 +64,13 @@ print(f" Changed working directory to {os.getcwd()}")
     }
   }
   /**
-   * Load the FastAPI bridge from the modular API structure
+   * Load the ASGI server for clean FastAPI execution (no monkey-patching)
    */
-  async loadFastAPIBridge(): Promise<void> {
-    console.log(" Loading FastAPI bridge from modular structure...");
+  async loadASGIServer(): Promise<void> {
+    console.log("🚀 Loading ASGI server (clean architecture - no monkey-patching)...");
     try {
-      // Import the bridge from the persistent API directory using Python import
+      // Import the ASGI server and FastAPI app
       await this.pyodide.runPythonAsync(`
-# Import the FastAPI bridge from the persistent API directory
 import sys
 import os
 
@@ -83,95 +82,83 @@ if "/persist/api" not in sys.path:
 if not os.getcwd().endswith("/persist/api"):
     os.chdir("/persist/api")
 
-# Try to import the bridge module properly
+print("📱 Loading FastAPI app (unmodified)...")
+from app.app_main import app
+print("✅ FastAPI app loaded successfully!")
+
+# Initialize the database
 try:
-    from app.core.bridge import EnhancedFastAPIBridge, execute_endpoint, get_endpoints, get_openapi_schema
-    # Create a global bridge instance
-    bridge = EnhancedFastAPIBridge()
-    print("✅ Successfully imported and created bridge from modular structure!")
-    
-    # Import the app to ensure all routes are loaded first
-    print("📱 Loading FastAPI app...")
-    from app.app_main import app
-    print("✅ FastAPI app loaded successfully!")
-    
-    # Now initialize the database after the app is ready
-    try:
-        from app.db.init_db import init_db_sync
-        print("🗄️ Initializing database...")
-        init_db_sync()
-        print("✅ Database initialized successfully!")
-    except Exception as e:
-        print(f"⚠️ Database initialization failed: {e}")
-        print(f"🔍 Error details: {type(e).__name__}: {str(e)}")
-        # Continue anyway - the error will be shown when endpoints are called
-except ImportError as e:
-    print(f"❌ Failed to import modular bridge: {e}")
-    # Fall back to executing the file directly
-    exec(open("/persist/api/app/core/bridge.py").read())
-    # Create bridge instance after exec
-    from app.core.bridge import EnhancedFastAPIBridge, execute_endpoint, get_endpoints, get_openapi_schema
-    bridge = EnhancedFastAPIBridge()
-    print("✅ Bridge loaded via exec fallback")
-    
-    # Import the app to ensure all routes are loaded first
-    print("📱 Loading FastAPI app...")
-    from app.app_main import app
-    print("✅ FastAPI app loaded successfully!")
-    
-    # Now initialize the database after the app is ready
-    try:
-        from app.db.init_db import init_db_sync
-        print("🗄️ Initializing database...")
-        init_db_sync()
-        print("✅ Database initialized successfully!")
-    except Exception as e:
-        print(f"⚠️ Database initialization failed: {e}")
-        print(f"🔍 Error details: {type(e).__name__}: {str(e)}")
-        # Continue anyway - the error will be shown when endpoints are called
+    from app.db.init_db import init_db_sync
+    print("🗄️ Initializing database...")
+    init_db_sync()
+    print("✅ Database initialized successfully!")
+except Exception as e:
+    print(f"⚠️ Database initialization failed: {e}")
+    print(f"🔍 Error details: {type(e).__name__}: {str(e)}")
+
+# Import and create ASGI server (NO monkey-patching!)
+print("🔧 Creating ASGI server...")
+from app.core.asgi_server import PyodideASGIServer
+
+# Wrap the unmodified FastAPI app with ASGI server
+asgi_server = PyodideASGIServer(app)
+print("✅ ASGI server created - FastAPI running unmodified!")
+
+# Helper function to get endpoints from FastAPI routes
+def get_endpoints_from_app():
+    """Extract endpoints directly from FastAPI app routes."""
+    endpoints = []
+    for route in app.routes:
+        if hasattr(route, 'methods') and hasattr(route, 'path'):
+            for method in route.methods:
+                if method.upper() not in ('HEAD', 'OPTIONS'):
+                    # Generate operation ID
+                    path_normalized = route.path.replace('/', '_').replace('{', '').replace('}', '')
+                    if path_normalized.startswith('_'):
+                        path_normalized = path_normalized[1:]
+                    operation_id = route.name or f"{method.lower()}{path_normalized}"
+                    
+                    endpoints.append({
+                        'operationId': operation_id,
+                        'method': method.upper(),
+                        'path': route.path,
+                        'summary': getattr(route.endpoint, '__doc__', '') or f"{method.upper()} {route.path}",
+                    })
+    return endpoints
+
+# Helper function to get OpenAPI schema from FastAPI
+def get_openapi_from_app():
+    """Get OpenAPI schema directly from FastAPI app."""
+    return app.openapi()
+
+print(f"📋 Registered {len(get_endpoints_from_app())} endpoints")
       `);
-      console.log(" Enhanced FastAPI bridge loaded from modular structure!");
+      console.log("✅ ASGI server initialized - using pure FastAPI!");
     } catch (error) {
-      console.warn(
-        " Could not load bridge from modular structure, falling back to fetch...",
-        error
-      );
-
-      // Fallback: fetch from public directory
-      const basePath = import.meta.env.BASE_URL || "/";
-      const bridgeModuleUrl = `${basePath}backend/app/core/bridge.py`.replace(
-        /\/+/g,
-        "/"
-      );
-
-      const response = await fetch(bridgeModuleUrl);
-      if (!response.ok) throw new Error(`Failed to load ${bridgeModuleUrl}`);
-      const bridgeCode = await response.text();
-
-      await this.pyodide.runPythonAsync(bridgeCode);
-      console.log(" Enhanced FastAPI bridge loaded from fallback!");
+      console.error("❌ Failed to load ASGI server:", error);
+      throw error;
     }
   }
   /**
-   * Reset the FastAPI app and bridge for new code
+   * Reset the ASGI server for new code (recreate FastAPI app)
    */
-  async resetFastAPIBridge(): Promise<void> {
-    // Reset the bridge for new code - but safely check if variables exist first
+  async resetASGIServer(): Promise<void> {
+    console.log("🔄 Resetting ASGI server for new code...");
+    // With ASGI, we just need to reload the app module
+    // No global state to clear since we don't monkey-patch!
     await this.pyodide.runPythonAsync(`
-# Reset the enhanced bridge for new code - clear app instance and registry safely
-try:
-    if '_app' in globals():
-        _app = None
-    if '_endpoints_registry' in globals():
-        _endpoints_registry.clear()
-    if 'bridge' in globals():
-        bridge = EnhancedFastAPIBridge()
-    else:
-        # Bridge not loaded yet, that's fine
-        pass
-except NameError:
-    # Variables don't exist yet, that's fine - first run
-    pass
+import importlib
+import sys
+
+# Reload the app module to get a fresh FastAPI instance
+if 'app.app_main' in sys.modules:
+    importlib.reload(sys.modules['app.app_main'])
+    from app.app_main import app
+    
+    # Recreate ASGI server with fresh app
+    from app.core.asgi_server import PyodideASGIServer
+    asgi_server = PyodideASGIServer(app)
+    print("✅ ASGI server reset with fresh FastAPI app")
 `);
   }
 }

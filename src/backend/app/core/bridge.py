@@ -1,5 +1,12 @@
 # bridge_final.py – Production-ready, Pyodide-optimized FastAPI bridge
 # -----------------------------------------------------------------------------------
+# ⚠️ DEPRECATED: This monkey-patching bridge is deprecated and no longer used.
+# The project now uses PyodideASGIServer (asgi_server.py) which provides a clean
+# ASGI interface without any monkey-patching or modifications to FastAPI.
+#
+# This file is kept for reference only and should not be used in new code.
+# See asgi_server.py for the current implementation.
+# -----------------------------------------------------------------------------------
 #  • Early monkey-patch to prevent import-order races
 #  • Event-loop fallback for Pyodide compatibility
 #  • Async endpoint and dependency support with proper error handling

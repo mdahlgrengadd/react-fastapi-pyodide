@@ -26,9 +26,9 @@ export class PyodideEndpointExecutor {
     // Execute user code
     await this.pyodide.runPythonAsync(pythonCode);
 
-    // Get endpoints from the FastAPI bridge
+    // Get endpoints directly from FastAPI app (no bridge!)
     const endpointsData = this.pyodide.runPython(
-      "bridge.get_endpoints()"
+      "get_endpoints_from_app()"
     ) as PyodideObject;
 
     // Type assertion is safe here as we know the Python function returns a list of endpoint dictionaries
@@ -54,7 +54,7 @@ export class PyodideEndpointExecutor {
     }
 
     const schema = this.pyodide.runPython(
-      "bridge.get_openapi_schema()"
+      "get_openapi_from_app()"
     ) as PyodideObject;
 
     // Type assertion is safe here as we know the Python function returns a dictionary
@@ -126,6 +126,7 @@ export class PyodideEndpointExecutor {
 
     const result = (await this.pyodide.runPythonAsync(`
 import json
+from urllib.parse import urlencode
 
 # Get parameters from globals (already converted to Python objects by Pyodide)
 request_body = globals().get('_request_body', None)
@@ -133,22 +134,101 @@ request_headers = globals().get('_request_headers', {})
 request_content_type = globals().get('_request_content_type', None)
 
 # Debug: Print what we received
-print(f" Python received operationId: ${operationId}")
-print(" Python received pathParams:", ${pathParamsStr})
-print(" Python received queryParams:", ${queryParamsStr})
-print(f" Python received body: {request_body} (type: {type(request_body)})")
-print(f" Python received headers: {request_headers}")
-print(f" Python received content_type: {request_content_type}")
+print(f"🔄 ASGI handling: ${operationId}")
+print(" Path params:", ${pathParamsStr})
+print(" Query params:", ${queryParamsStr})
+print(f" Body: {request_body} (type: {type(request_body)})")
+print(f" Headers: {request_headers}")
 
-# Call the endpoint executor with headers and content_type
-result = await execute_endpoint(
-    "${operationId}",
-    ${pathParamsStr},
-    ${queryParamsStr},
-    request_body,
-    request_headers,
-    request_content_type
-)
+# Find the endpoint in the app routes
+path_params = ${pathParamsStr} or {}
+query_params = ${queryParamsStr} or {}
+
+# Find matching route
+target_route = None
+for route in app.routes:
+    if hasattr(route, 'name') and route.name == "${operationId}":
+        target_route = route
+        break
+    if hasattr(route, 'methods'):
+        for method in route.methods:
+            path_normalized = route.path.replace('/', '_').replace('{', '').replace('}', '')
+            if path_normalized.startswith('_'):
+                path_normalized = path_normalized[1:]
+            op_id = f"{method.lower()}{path_normalized}"
+            if op_id == "${operationId}":
+                target_route = route
+                break
+    if target_route:
+        break
+
+if not target_route:
+    result = {"content": {"error": "Endpoint not found: ${operationId}"}, "status_code": 404}
+else:
+    # Build ASGI scope for this request
+    path = target_route.path
+    # Replace path parameters
+    for key, value in path_params.items():
+        path = path.replace(f'{{{key}}}', str(value))
+    
+    # Build query string
+    query_string = urlencode(query_params) if query_params else ""
+    
+    # Determine HTTP method from route
+    http_method = list(target_route.methods)[0] if hasattr(target_route, 'methods') else "GET"
+    
+    # Prepare request body
+    body_bytes = b""
+    if request_body is not None:
+        if isinstance(request_body, str):
+            body_bytes = request_body.encode('utf-8')
+        elif isinstance(request_body, dict):
+            # JSON encode dicts
+            body_bytes = json.dumps(request_body).encode('utf-8')
+            if 'content-type' not in {k.lower(): v for k, v in request_headers.items()}:
+                request_headers['content-type'] = 'application/json'
+        elif isinstance(request_body, bytes):
+            body_bytes = request_body
+    
+    # Build headers list
+    headers_list = [[k.lower().encode('latin-1'), str(v).encode('latin-1')] for k, v in request_headers.items()]
+    
+    # Build ASGI scope
+    scope = {
+        'type': 'http',
+        'method': http_method.upper(),
+        'path': path,
+        'query_string': query_string,
+        'headers': headers_list,
+        'body': body_bytes,
+        'scheme': 'https',
+    }
+    
+    print(f"📡 Calling ASGI server: {http_method} {path}")
+    
+    # Call ASGI server
+    asgi_response = await asgi_server.handle_request(scope)
+    
+    # Parse response
+    status = asgi_response.get('status', 200)
+    body_data = asgi_response.get('body', b'')
+    
+    # Decode body
+    if isinstance(body_data, bytes):
+        try:
+            content = json.loads(body_data.decode('utf-8'))
+        except:
+            content = body_data.decode('utf-8', errors='ignore')
+    else:
+        content = body_data
+    
+    result = {
+        'content': content,
+        'status_code': status
+    }
+    
+    print(f"✅ ASGI response: {status}")
+
 result
 `)) as PyodideObject;
 

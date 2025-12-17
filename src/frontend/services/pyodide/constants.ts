@@ -24,7 +24,7 @@ export const PYODIDE_CONFIG = {
     "/app/app_main.py",
     "/app/api/__init__.py",
     "/app/api/v1/__init__.py",
-    "/app/core/bridge.py",
+    "/app/core/asgi_server.py",
     "/app/core/settings.py",
     "/app/core/logging.py",
     "/app/core/security.py",

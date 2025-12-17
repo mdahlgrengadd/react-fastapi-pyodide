@@ -70,8 +70,8 @@ export class PyodideEngine {
     // Set up API directory structure and load Python API files
     await this.apiManager.setupAPIDirectory();
 
-    // Load the FastAPI bridge from the modular structure
-    await this.apiManager.loadFastAPIBridge();
+    // Load the ASGI server (clean architecture - no monkey-patching)
+    await this.apiManager.loadASGIServer();
 
     // Set up JavaScript callback for manual persistence saves from Python
     this.pyodide.globals.set("_js_save_persistent_state", async () => {
@@ -95,8 +95,8 @@ export class PyodideEngine {
       );
     }
 
-    // Reset the FastAPI app for new code
-    await this.apiManager!.resetFastAPIBridge();
+    // Reset the ASGI server for new code
+    await this.apiManager!.resetASGIServer();
 
     // Load user code through the endpoint executor
     await this.endpointExecutor!.loadUserCode(pythonCode);
