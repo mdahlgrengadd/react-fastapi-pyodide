@@ -24,8 +24,8 @@ export class PyodideASGIBridge {
     // Load ASGI server module
     await this.loadASGIServer();
 
-    // Register Service Worker
-    await this.registerServiceWorker();
+    // Wait for Service Worker to be ready (it should be registered in main.tsx)
+    await this.waitForServiceWorker();
 
     // Connect Service Worker to Pyodide
     await this.connectServiceWorker();
@@ -60,33 +60,29 @@ print("✅ ASGI server initialized")
   }
 
   /**
-   * Register the Service Worker
+   * Wait for Service Worker to be ready
    */
-  private async registerServiceWorker(): Promise<void> {
+  private async waitForServiceWorker(): Promise<void> {
     if (!("serviceWorker" in navigator)) {
-      console.warn("⚠️ Service Workers not supported in this browser");
-      return;
+      throw new Error("Service Workers not supported in this browser");
     }
 
-    console.log("📝 Registering Service Worker...");
+    console.log("⏳ Waiting for Service Worker to be ready...");
 
     try {
-      const registration = await navigator.serviceWorker.register(
-        "/pyodide-asgi-worker.js",
-        {
-          scope: "/api/backend/",
-        }
-      );
-
       // Wait for the service worker to be ready
-      await navigator.serviceWorker.ready;
+      const registration = await navigator.serviceWorker.ready;
 
       this.serviceWorker =
         registration.active || registration.installing || registration.waiting;
 
-      console.log("✅ Service Worker registered");
+      if (!this.serviceWorker) {
+        throw new Error("Service Worker not available");
+      }
+
+      console.log("✅ Service Worker ready");
     } catch (error) {
-      console.error("❌ Service Worker registration failed:", error);
+      console.error("❌ Service Worker not available:", error);
       throw error;
     }
   }
@@ -196,15 +192,8 @@ print("✅ ASGI server initialized")
       this.messageChannel = null;
     }
 
-    // Unregister service worker
-    if ("serviceWorker" in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      for (const registration of registrations) {
-        if (registration.scope.includes("/api/backend/")) {
-          await registration.unregister();
-        }
-      }
-    }
+    // Note: We don't unregister the service worker as it may be used by other parts of the app
+    // The service worker will continue to cache resources and can be reused
 
     this.serviceWorker = null;
     this.asgiServer = null;

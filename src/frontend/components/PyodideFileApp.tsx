@@ -16,7 +16,7 @@ export const PyodideFileApp: React.FC<PyodideFileAppProps> = ({
   onError,
   onLoading,
 }) => {
-  const [pythonCode, setPythonCode] = useState<string | null>(null);
+  const [pythonCode, setPythonCode] = useState<string | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 

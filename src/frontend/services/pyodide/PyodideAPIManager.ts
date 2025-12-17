@@ -83,6 +83,14 @@ if not os.getcwd().endswith("/persist/api"):
     os.chdir("/persist/api")
 
 print("📱 Loading FastAPI app (unmodified)...")
+
+# Clear cached session module to force reload with StaticPool fix
+if 'app.db.session' in sys.modules:
+    print("🔄 Clearing cached db.session module...")
+    del sys.modules['app.db.session']
+if 'app.db' in sys.modules:
+    del sys.modules['app.db']
+
 from app.app_main import app
 print("✅ FastAPI app loaded successfully!")
 

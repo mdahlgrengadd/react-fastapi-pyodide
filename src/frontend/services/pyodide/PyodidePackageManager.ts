@@ -32,6 +32,7 @@ try:
         "python-multipart",   # For form data parsing
         "pydantic-settings",  # For settings management
         "sqlalchemy",         # Commonly needed for database work
+        "PyJWT",              # For OAuth2 JWT tokens
     ])
     print(" FastAPI and dependencies installed successfully")
 except Exception as e:

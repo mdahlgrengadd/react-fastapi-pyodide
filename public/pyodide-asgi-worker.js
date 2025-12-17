@@ -1,15 +1,25 @@
 /**
  * Pyodide ASGI Service Worker
  *
- * This Service Worker intercepts HTTP requests to /api/* and forwards them
- * to a Pyodide ASGI server, enabling FastAPI to run without monkey-patching.
+ * This Service Worker:
+ * 1. Intercepts HTTP requests to /api/backend/* and forwards to Pyodide ASGI server
+ * 2. Caches Pyodide runtime and Python files for faster loading
+ * 3. Enables offline-capable FastAPI in the browser
  *
  * Architecture:
  * Browser fetch() → Service Worker → ASGI scope → Pyodide → FastAPI → Response
  */
 
-const CACHE_NAME = "pyodide-asgi-v1";
+const CACHE_NAME = "pyodide-asgi-v2";
 const API_PREFIX = "/api/backend";
+
+// Pyodide CDN resources to cache
+const PYODIDE_CDN = "https://cdn.jsdelivr.net/pyodide/v0.27.7/full";
+const PYODIDE_RESOURCES = [
+  `${PYODIDE_CDN}/pyodide.js`,
+  `${PYODIDE_CDN}/pyodide.asm.wasm`,
+  `${PYODIDE_CDN}/python_stdlib.zip`,
+];
 
 // Flag to track if Pyodide is ready
 let pyodideReady = false;
@@ -26,27 +36,100 @@ self.addEventListener("message", (event) => {
 
 // Install event
 self.addEventListener("install", (event) => {
-  console.log("[Service Worker] Installing Pyodide ASGI Worker");
-  // Skip waiting to activate immediately
-  self.skipWaiting();
+  console.log("[ASGI Worker] Installing Pyodide ASGI Worker");
+  
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log("[ASGI Worker] Caching Pyodide resources");
+      // Pre-cache Pyodide resources for faster loading
+      return cache.addAll(PYODIDE_RESOURCES).catch((err) => {
+        console.warn("[ASGI Worker] Failed to cache some resources:", err);
+        // Continue even if some resources fail to cache
+      });
+    }).then(() => {
+      // Skip waiting to activate immediately
+      return self.skipWaiting();
+    })
+  );
 });
 
 // Activate event
 self.addEventListener("activate", (event) => {
-  console.log("[Service Worker] Activating Pyodide ASGI Worker");
-  // Claim all clients immediately
-  event.waitUntil(self.clients.claim());
+  console.log("[ASGI Worker] Activating Pyodide ASGI Worker");
+  
+  event.waitUntil(
+    // Clean up old caches
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME && cacheName.startsWith("pyodide-")) {
+            console.log("[ASGI Worker] Deleting old cache:", cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => {
+      // Claim all clients immediately
+      return self.clients.claim();
+    })
+  );
 });
 
-// Fetch event - intercept API requests
+// Fetch event - intercept API requests and cache Pyodide resources
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Only intercept API requests
+  // Strategy 1: Intercept API requests and forward to ASGI
   if (url.pathname.startsWith(API_PREFIX)) {
     event.respondWith(handleASGIRequest(event.request));
+    return;
   }
-  // All other requests pass through
+
+  // Strategy 2: Cache Pyodide CDN resources (Cache First)
+  if (url.hostname === "cdn.jsdelivr.net" && url.pathname.includes("pyodide")) {
+    event.respondWith(
+      caches.match(event.request).then((response) => {
+        if (response) {
+          console.log("[ASGI Worker] Serving Pyodide from cache:", url.pathname);
+          return response;
+        }
+        console.log("[ASGI Worker] Fetching and caching Pyodide:", url.pathname);
+        return fetch(event.request).then((response) => {
+          if (response.status === 200) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Strategy 3: Cache Python files (Cache First)
+  if (event.request.url.endsWith(".py") || event.request.url.includes("/backend/")) {
+    event.respondWith(
+      caches.match(event.request).then((response) => {
+        if (response) {
+          return response;
+        }
+        return fetch(event.request).then((response) => {
+          if (response.status === 200) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // All other requests pass through (Network First)
 });
 
 /**

@@ -130,8 +130,17 @@ from urllib.parse import urlencode
 
 # Get parameters from globals (already converted to Python objects by Pyodide)
 request_body = globals().get('_request_body', None)
-request_headers = globals().get('_request_headers', {})
+request_headers_proxy = globals().get('_request_headers', {})
 request_content_type = globals().get('_request_content_type', None)
+
+# Convert JavaScript proxy object to Python dict
+request_headers = {}
+if request_headers_proxy is not None:
+    try:
+        # Try to convert using to_py() if it's a JavaScript proxy
+        request_headers = request_headers_proxy.to_py() if hasattr(request_headers_proxy, 'to_py') else dict(request_headers_proxy)
+    except:
+        request_headers = {}
 
 # Debug: Print what we received
 print(f"🔄 ASGI handling: ${operationId}")

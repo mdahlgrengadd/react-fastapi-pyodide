@@ -17,17 +17,20 @@ except ImportError:
     from sqlalchemy.orm import sessionmaker, Session as SyncSession
     HAS_ASYNC_SQLALCHEMY = False
 
-from app.core.runtime import IS_PYODIDE, get_environment
+from app.core.runtime import is_pyodide, get_environment
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Export IS_PYODIDE as a constant for other modules to import
+IS_PYODIDE = is_pyodide()
 
 
 def get_database_url() -> tuple[str, str]:
     """Get the appropriate database URL based on environment."""
     env = get_environment()
 
-    if IS_PYODIDE:
+    if is_pyodide():
         try:
             # Use persistent database URL in Pyodide environment
             # This function will be available in the Pyodide context when bridge is loaded
@@ -57,7 +60,7 @@ def get_database_url() -> tuple[str, str]:
 # Initialize database URL and environment
 DATABASE_URL, ENVIRONMENT = get_database_url()
 
-if HAS_ASYNC_SQLALCHEMY and not IS_PYODIDE:
+if HAS_ASYNC_SQLALCHEMY and not is_pyodide():
     # Use async SQLAlchemy for CPython
     # Convert sync SQLite URL to async for local development
     async_url = DATABASE_URL.replace("sqlite:///", "sqlite+aiosqlite:///")
@@ -77,12 +80,21 @@ else:
     # Use sync SQLAlchemy for Pyodide or environments without async support
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import NullPool
 
-    engine = create_engine(
-        DATABASE_URL,
-        connect_args={
-            "check_same_thread": False} if "sqlite" in DATABASE_URL else {}
-    )
+    # Pyodide doesn't support threading, so we need special configuration
+    engine_kwargs = {
+        "connect_args": {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+    }
+    
+    if is_pyodide():
+        # Use NullPool to completely disable connection pooling in Pyodide
+        # This avoids all threading issues by creating fresh connections each time
+        engine_kwargs["poolclass"] = NullPool
+        engine_kwargs["connect_args"]["check_same_thread"] = False
+        logger.info("Using NullPool for Pyodide (no threading)")
+    
+    engine = create_engine(DATABASE_URL, **engine_kwargs)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     def get_db():
@@ -96,14 +108,24 @@ else:
 
 def get_db_sync():
     """Get synchronous database session for compatibility."""
-    if not IS_PYODIDE and HAS_ASYNC_SQLALCHEMY:
+    if not is_pyodide() and HAS_ASYNC_SQLALCHEMY:
         # In CPython with async support, we need a sync session for certain operations
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
+        from sqlalchemy.pool import NullPool
+        
+        sync_engine_kwargs = {
+            "connect_args": {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+        }
+        
+        # Also use NullPool here to avoid threading issues
+        if is_pyodide():
+            sync_engine_kwargs["poolclass"] = NullPool
+            logger.info("Using NullPool for sync engine (no threading)")
+        
         sync_engine = create_engine(
             DATABASE_URL.replace("sqlite+aiosqlite:///", "sqlite:///"),
-            connect_args={
-                "check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+            **sync_engine_kwargs
         )
         SyncSessionLocal = sessionmaker(
             autocommit=False, autoflush=False, bind=sync_engine)

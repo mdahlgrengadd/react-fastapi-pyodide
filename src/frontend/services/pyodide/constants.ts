@@ -3,7 +3,7 @@ export const PYODIDE_CONFIG = {
   CDN_BASE_URL: "https://cdn.jsdelivr.net/pyodide",
   PERSIST_ROOT: "/persist",
   STORAGE_VERSION_KEY: "pyodide_storage_version",
-  CURRENT_STORAGE_VERSION: "1.0.1",
+  CURRENT_STORAGE_VERSION: "1.0.4", // Bumped for is_pyodide() detection fix
   API_PATHS: [
     "/persist/api",
     "/persist/api/app",
@@ -16,6 +16,7 @@ export const PYODIDE_CONFIG = {
     "/persist/api/app/domains/posts",
     "/persist/api/app/domains/dashboard",
     "/persist/api/app/domains/system",
+    "/persist/api/app/examples",
     "/persist/api/v1",
   ],
   API_FILES: [
@@ -51,6 +52,8 @@ export const PYODIDE_CONFIG = {
     "/app/domains/system/__init__.py",
     "/app/domains/__init__.py",
     "/app/domains/models.py",
+    "/app/examples/__init__.py",
+    "/app/examples/oauth2_example.py",
     "/v1/main.py",
   ],
   MUTATING_METHODS: ["POST", "PUT", "PATCH", "DELETE"],

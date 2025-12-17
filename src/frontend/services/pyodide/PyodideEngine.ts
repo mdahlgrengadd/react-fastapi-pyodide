@@ -1,5 +1,6 @@
 import { PYODIDE_CONFIG } from './constants';
 import { PyodideAPIManager } from './PyodideAPIManager';
+import { PyodideASGIBridge } from './PyodideASGIBridge';
 import { PyodideEndpointExecutor } from './PyodideEndpointExecutor';
 import { PyodidePackageManager } from './PyodidePackageManager';
 import { PyodidePersistence } from './PyodidePersistence';
@@ -16,6 +17,7 @@ export class PyodideEngine {
   private packageManager: PyodidePackageManager | null = null;
   private apiManager: PyodideAPIManager | null = null;
   private endpointExecutor: PyodideEndpointExecutor | null = null;
+  private asgiBridge: PyodideASGIBridge | null = null;
 
   /**
    * Initialize Pyodide and all its components
@@ -72,6 +74,16 @@ export class PyodideEngine {
 
     // Load the ASGI server (clean architecture - no monkey-patching)
     await this.apiManager.loadASGIServer();
+
+    // Initialize ASGI bridge to connect service worker to Pyodide
+    try {
+      this.asgiBridge = new PyodideASGIBridge();
+      await this.asgiBridge.initialize(this.pyodide);
+      console.log("✅ ASGI Service Worker bridge connected");
+    } catch (error) {
+      console.warn("⚠️ ASGI bridge initialization failed (service worker may not be available):", error);
+      // Continue without service worker - direct execution will still work
+    }
 
     // Set up JavaScript callback for manual persistence saves from Python
     this.pyodide.globals.set("_js_save_persistent_state", async () => {
@@ -196,6 +208,24 @@ export class PyodideEngine {
   }
 
   // =============== STATUS METHODS ===============
+
+  /**
+   * Clean up resources
+   */
+  async cleanup(): Promise<void> {
+    // Clean up ASGI bridge first
+    if (this.asgiBridge) {
+      await this.asgiBridge.cleanup();
+      this.asgiBridge = null;
+    }
+
+    this.isInitialized = false;
+    this.pyodide = null;
+    this.persistence = null;
+    this.packageManager = null;
+    this.apiManager = null;
+    this.endpointExecutor = null;
+  }
 
   /**
    * Check if Pyodide is initialized
