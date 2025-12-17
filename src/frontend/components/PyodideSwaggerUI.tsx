@@ -175,19 +175,40 @@ export const PyodideSwaggerUI: React.FC<PyodideSwaggerUIProps> = ({
           const queryParams: Record<string, unknown> = {};
           urlObj.searchParams.forEach((value, key) => {
             queryParams[key] = value;
-          }); // Parse request body
+          });
+
+          // Extract headers
+          const headers: Record<string, string> = {};
+          if (init?.headers) {
+            const headerObj = new Headers(init.headers);
+            headerObj.forEach((value, key) => {
+              headers[key.toLowerCase()] = value;
+            });
+          }
+
+          // Get content type
+          const contentType = headers['content-type'] || '';
+
+          // Parse request body
           let body = null;
           if (init?.body) {
             try {
               if (typeof init.body === "string") {
-                // Fix common Python/JavaScript boolean differences in the JSON
-                let bodyStr = init.body;
-                bodyStr = bodyStr.replace(/:\s*True\b/g, ": true");
-                bodyStr = bodyStr.replace(/:\s*False\b/g, ": false");
-                bodyStr = bodyStr.replace(/:\s*None\b/g, ": null");
+                // Check if it's form-urlencoded data
+                if (contentType.includes('application/x-www-form-urlencoded')) {
+                  // Keep as string for Python to parse
+                  body = init.body;
+                  console.log(" Form data (raw):", body);
+                } else {
+                  // Fix common Python/JavaScript boolean differences in the JSON
+                  let bodyStr = init.body;
+                  bodyStr = bodyStr.replace(/:\s*True\b/g, ": true");
+                  bodyStr = bodyStr.replace(/:\s*False\b/g, ": false");
+                  bodyStr = bodyStr.replace(/:\s*None\b/g, ": null");
 
-                body = JSON.parse(bodyStr);
-                console.log(" Parsed body:", body);
+                  body = JSON.parse(bodyStr);
+                  console.log(" Parsed JSON body:", body);
+                }
               } else {
                 body = init.body;
               }
@@ -207,14 +228,18 @@ export const PyodideSwaggerUI: React.FC<PyodideSwaggerUIProps> = ({
             pathParams,
             queryParams,
             body,
+            headers,
+            contentType,
           });
 
-          // Execute through Pyodide
+          // Execute through Pyodide with headers and content type
           const result = await pyodideEngine.executeEndpoint(
             endpoint.operationId,
             pathParams,
             queryParams,
-            body
+            body,
+            headers,
+            contentType
           );
 
           console.log(" Pyodide execution result:", result);

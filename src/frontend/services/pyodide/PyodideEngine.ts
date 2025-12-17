@@ -130,7 +130,9 @@ export class PyodideEngine {
     operationId: string,
     pathParams?: Record<string, string>,
     queryParams?: Record<string, unknown>,
-    body?: unknown
+    body?: unknown,
+    headers?: Record<string, string>,
+    contentType?: string
   ): Promise<unknown> {
     if (!this.isInitialized || !this.endpointExecutor) {
       throw new Error("PyodideEngine not properly initialized");
@@ -140,7 +142,9 @@ export class PyodideEngine {
       operationId,
       pathParams,
       queryParams,
-      body
+      body,
+      headers,
+      contentType
     );
 
     // Auto-save state after data-modifying operations

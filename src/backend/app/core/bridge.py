@@ -580,11 +580,14 @@ async def execute_endpoint(
     operation_id: str,
     path_params: Optional[Dict[str, Any]] = None,
     query_params: Optional[Dict[str, Any]] = None,
-    body: Any = None
+    body: Any = None,
+    headers: Optional[Dict[str, str]] = None,
+    content_type: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Execute endpoint with full async support and event-loop fallback."""
+    """Execute endpoint with full async support, headers, and form data support."""
     path_params = path_params or {}
     query_params = query_params or {}
+    headers = headers or {}
 
     # Handle Pyodide JsProxy conversion
     try:
@@ -596,7 +599,18 @@ async def execute_endpoint(
             try:
                 body = body.to_py()
             except Exception:
-                pass    # Find handler - first check registry, then check FastAPI routes
+                pass
+
+    # Parse form data if content type is form-urlencoded
+    if content_type and 'application/x-www-form-urlencoded' in content_type:
+        if isinstance(body, str):
+            from urllib.parse import parse_qs
+            # Parse form data and flatten single-value lists
+            parsed = parse_qs(body, keep_blank_values=True)
+            body = {k: v[0] if len(v) == 1 else v for k, v in parsed.items()}
+        log(f"Parsed form data: {body}")
+
+    # Find handler - first check registry, then check FastAPI routes
     handler = None
 
     if operation_id in _endpoints_registry:
@@ -649,7 +663,7 @@ async def execute_endpoint(
     try:
         # Prepare arguments
         sig = inspect.signature(handler)
-        kwargs = await _prepare_handler_kwargs(sig, path_params, query_params, body)
+        kwargs = await _prepare_handler_kwargs(sig, path_params, query_params, body, headers, content_type)
 
         # Execute handler with event-loop fallback
         if inspect.iscoroutinefunction(handler):
@@ -725,9 +739,11 @@ async def _prepare_handler_kwargs(
     sig: inspect.Signature,
     path_params: Dict[str, Any],
     query_params: Dict[str, Any],
-    body: Any
+    body: Any,
+    headers: Dict[str, str],
+    content_type: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Prepare handler keyword arguments with type conversion."""
+    """Prepare handler keyword arguments with type conversion, headers, and OAuth2 support."""
     kwargs: Dict[str, Any] = {}
 
     def _convert_param(val: Any, annotation: Any) -> Any:
@@ -745,11 +761,71 @@ async def _prepare_handler_kwargs(
         elif name in query_params:
             kwargs[name] = _convert_param(query_params[name], param.annotation)
         elif isinstance(param.default, _DependsShim):
-            kwargs[name] = await param.default.resolve()
-        elif hasattr(param.default, "dependency"):
-            # Handle FastAPI Depends
+            # Check if this is an OAuth2 security scheme
             dep = param.default.dependency
-            if inspect.iscoroutinefunction(dep):
+            dep_class_name = dep.__class__.__name__ if hasattr(dep, '__class__') else ''
+
+            # Handle OAuth2PasswordBearer - extracts token from Authorization header
+            if 'OAuth2PasswordBearer' in dep_class_name or 'HTTPBearer' in dep_class_name:
+                auth_header = headers.get('authorization', '') or headers.get('Authorization', '')
+                if auth_header.startswith('Bearer '):
+                    kwargs[name] = auth_header[7:]  # Remove "Bearer " prefix
+                elif auth_header:
+                    kwargs[name] = auth_header
+                else:
+                    # No token provided - OAuth2 schemes should raise 401
+                    kwargs[name] = None
+                log(f"OAuth2PasswordBearer: extracted token from Authorization header")
+            # Handle OAuth2PasswordRequestForm - creates form object from body
+            elif 'OAuth2PasswordRequestForm' in dep_class_name:
+                if content_type and 'application/x-www-form-urlencoded' in content_type and body:
+                    # Create a form object with the expected attributes
+                    class OAuth2FormData:
+                        def __init__(self, data: dict):
+                            self.username = data.get('username', '')
+                            self.password = data.get('password', '')
+                            self.scope = data.get('scope', '')
+                            self.grant_type = data.get('grant_type', 'password')
+                            self.client_id = data.get('client_id')
+                            self.client_secret = data.get('client_secret')
+                    kwargs[name] = OAuth2FormData(body)
+                    log(f"OAuth2PasswordRequestForm: created form object from body")
+                else:
+                    # Try to resolve normally if not form data
+                    kwargs[name] = await param.default.resolve()
+            else:
+                # Regular dependency resolution
+                kwargs[name] = await param.default.resolve()
+        elif hasattr(param.default, "dependency"):
+            # Handle original FastAPI Depends
+            dep = param.default.dependency
+            dep_class_name = dep.__class__.__name__ if hasattr(dep, '__class__') else ''
+
+            # Check if it's an OAuth2 scheme (same logic as above)
+            if 'OAuth2PasswordBearer' in dep_class_name or 'HTTPBearer' in dep_class_name:
+                auth_header = headers.get('authorization', '') or headers.get('Authorization', '')
+                if auth_header.startswith('Bearer '):
+                    kwargs[name] = auth_header[7:]
+                elif auth_header:
+                    kwargs[name] = auth_header
+                else:
+                    kwargs[name] = None
+                log(f"OAuth2PasswordBearer (FastAPI Depends): extracted token")
+            elif 'OAuth2PasswordRequestForm' in dep_class_name:
+                if content_type and 'application/x-www-form-urlencoded' in content_type and body:
+                    class OAuth2FormData:
+                        def __init__(self, data: dict):
+                            self.username = data.get('username', '')
+                            self.password = data.get('password', '')
+                            self.scope = data.get('scope', '')
+                            self.grant_type = data.get('grant_type', 'password')
+                            self.client_id = data.get('client_id')
+                            self.client_secret = data.get('client_secret')
+                    kwargs[name] = OAuth2FormData(body)
+                    log(f"OAuth2PasswordRequestForm (FastAPI Depends): created form object")
+                else:
+                    kwargs[name] = None
+            elif inspect.iscoroutinefunction(dep):
                 kwargs[name] = await dep()
             else:
                 result = dep()

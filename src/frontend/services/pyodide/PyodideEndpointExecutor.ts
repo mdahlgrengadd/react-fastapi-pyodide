@@ -75,7 +75,9 @@ export class PyodideEndpointExecutor {
     operationId: string,
     pathParams?: Record<string, string>,
     queryParams?: Record<string, unknown>,
-    body?: unknown
+    body?: unknown,
+    headers?: Record<string, string>,
+    contentType?: string
   ): Promise<unknown> {
     if (!this.isUserCodeLoaded) {
       throw new Error("User code not loaded");
@@ -85,11 +87,15 @@ export class PyodideEndpointExecutor {
     const safePathParams = pathParams || null;
     const safeQueryParams = queryParams || null;
     const safeBody = body !== undefined ? body : null;
+    const safeHeaders = headers || {};
+    const safeContentType = contentType || null;
 
     console.log(` Executing endpoint: ${operationId}`, {
       pathParams: safePathParams,
       queryParams: safeQueryParams,
       body: safeBody,
+      headers: safeHeaders,
+      contentType: safeContentType,
     });
 
     // Prepare parameters for Python execution
@@ -101,31 +107,47 @@ export class PyodideEndpointExecutor {
       : "None";
 
     // Don't stringify the body - pass it as a Python object reference
-    // Set the body in Python globals so it can be accessed properly
+    // Set the body, headers, and content type in Python globals
     if (safeBody !== null) {
       this.pyodide.globals.set("_request_body", safeBody);
     } else {
       this.pyodide.globals.set("_request_body", null);
     }
 
+    // Pass headers as a dictionary
+    this.pyodide.globals.set("_request_headers", safeHeaders);
+
+    // Pass content type as a string
+    if (safeContentType !== null) {
+      this.pyodide.globals.set("_request_content_type", safeContentType);
+    } else {
+      this.pyodide.globals.set("_request_content_type", null);
+    }
+
     const result = (await this.pyodide.runPythonAsync(`
 import json
 
-# Get the body from globals (already converted to Python object by Pyodide)
+# Get parameters from globals (already converted to Python objects by Pyodide)
 request_body = globals().get('_request_body', None)
+request_headers = globals().get('_request_headers', {})
+request_content_type = globals().get('_request_content_type', None)
 
 # Debug: Print what we received
 print(f" Python received operationId: ${operationId}")
 print(" Python received pathParams:", ${pathParamsStr})
 print(" Python received queryParams:", ${queryParamsStr})
 print(f" Python received body: {request_body} (type: {type(request_body)})")
+print(f" Python received headers: {request_headers}")
+print(f" Python received content_type: {request_content_type}")
 
-# Call the endpoint executor
+# Call the endpoint executor with headers and content_type
 result = await execute_endpoint(
     "${operationId}",
     ${pathParamsStr},
     ${queryParamsStr},
-    request_body
+    request_body,
+    request_headers,
+    request_content_type
 )
 result
 `)) as PyodideObject;
