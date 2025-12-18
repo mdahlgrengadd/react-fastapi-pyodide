@@ -106,32 +106,33 @@ except Exception as e:
 
 # Import and create ASGI server (NO monkey-patching!)
 print("🔧 Creating ASGI server...")
-from app.core.asgi_server import PyodideASGIServer
+from app.core.asgi_server import create_asgi_server
 
 # Wrap the unmodified FastAPI app with ASGI server
-asgi_server = PyodideASGIServer(app)
+asgi_server = create_asgi_server(app, streaming=True)
 print("✅ ASGI server created - FastAPI running unmodified!")
 
 # Helper function to get endpoints from FastAPI routes
 def get_endpoints_from_app():
-    """Extract endpoints directly from FastAPI app routes."""
+    """Extract endpoints from FastAPI OpenAPI schema (most reliable)."""
+    # Force OpenAPI schema generation to ensure all routes are registered
+    openapi_schema = app.openapi()
     endpoints = []
-    for route in app.routes:
-        if hasattr(route, 'methods') and hasattr(route, 'path'):
-            for method in route.methods:
-                if method.upper() not in ('HEAD', 'OPTIONS'):
-                    # Generate operation ID
-                    path_normalized = route.path.replace('/', '_').replace('{', '').replace('}', '')
-                    if path_normalized.startswith('_'):
-                        path_normalized = path_normalized[1:]
-                    operation_id = route.name or f"{method.lower()}{path_normalized}"
-                    
-                    endpoints.append({
-                        'operationId': operation_id,
-                        'method': method.upper(),
-                        'path': route.path,
-                        'summary': getattr(route.endpoint, '__doc__', '') or f"{method.upper()} {route.path}",
-                    })
+    
+    # Extract from OpenAPI paths
+    for path, path_item in openapi_schema.get('paths', {}).items():
+        for method, operation in path_item.items():
+            if method.upper() not in ['HEAD', 'OPTIONS']:
+                operation_id = operation.get('operationId', f"{method}_{path.replace('/', '_')}")
+                summary = operation.get('summary', f"{method.upper()} {path}")
+                
+                endpoints.append({
+                    'operationId': operation_id,
+                    'method': method.upper(),
+                    'path': path,
+                    'summary': summary,
+                })
+    
     return endpoints
 
 # Helper function to get OpenAPI schema from FastAPI
@@ -152,21 +153,55 @@ print(f"📋 Registered {len(get_endpoints_from_app())} endpoints")
    */
   async resetASGIServer(): Promise<void> {
     console.log("🔄 Resetting ASGI server for new code...");
-    // With ASGI, we just need to reload the app module
-    // No global state to clear since we don't monkey-patch!
+    // Clear all app-related modules and reimport to pick up new endpoints
     await this.pyodide.runPythonAsync(`
 import importlib
 import sys
 
-# Reload the app module to get a fresh FastAPI instance
+# Step 1: Delete all domain router modules to force complete reimport
+router_modules = [
+    'app.domains.system.router',
+    'app.domains.users.router',
+    'app.domains.posts.router',
+    'app.domains.dashboard.router',
+]
+
+for module_name in router_modules:
+    if module_name in sys.modules:
+        del sys.modules[module_name]
+        print(f"🗑️ Deleted {module_name}")
+
+# Step 2: Delete API modules to force fresh imports
+api_modules = ['app.api.v1', 'app.api']
+for module_name in api_modules:
+    if module_name in sys.modules:
+        del sys.modules[module_name]
+        print(f"🗑️ Deleted {module_name}")
+
+# Step 3: Delete and reload the app module to create fresh FastAPI instance
 if 'app.app_main' in sys.modules:
-    importlib.reload(sys.modules['app.app_main'])
-    from app.app_main import app
-    
-    # Recreate ASGI server with fresh app
-    from app.core.asgi_server import PyodideASGIServer
-    asgi_server = PyodideASGIServer(app)
-    print("✅ ASGI server reset with fresh FastAPI app")
+    del sys.modules['app.app_main']
+    print("🗑️ Deleted app.app_main")
+
+# Step 4: Import everything fresh
+from app.app_main import app
+
+# Force OpenAPI schema generation to ensure all routes are registered
+openapi_schema = app.openapi()
+paths = openapi_schema.get('paths', {})
+print(f"📋 App has {len(paths)} paths after fresh import")
+
+# List all route paths for debugging
+print("📍 Routes from OpenAPI:")
+for path, path_item in paths.items():
+    for method in path_item.keys():
+        if method.upper() not in ['HEAD', 'OPTIONS']:
+            print(f"  {method.upper()} {path}")
+
+# Recreate ASGI server with fresh app
+from app.core.asgi_server import create_asgi_server
+asgi_server = create_asgi_server(app, streaming=True)
+print("✅ ASGI server reset with fresh FastAPI app")
 `);
   }
 }

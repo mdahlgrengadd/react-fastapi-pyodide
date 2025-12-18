@@ -80,8 +80,9 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
   // Strategy 1: Intercept API requests and forward to ASGI
-  if (url.pathname.startsWith(API_PREFIX)) {
-    event.respondWith(handleASGIRequest(event.request));
+  const apiIndex = url.pathname.indexOf(API_PREFIX);
+  if (apiIndex !== -1) {
+    event.respondWith(handleASGIRequest(event.request, apiIndex));
     return;
   }
 
@@ -135,14 +136,16 @@ self.addEventListener("fetch", (event) => {
 /**
  * Handle an API request through the ASGI interface
  */
-async function handleASGIRequest(request) {
+async function handleASGIRequest(request, apiIndex = 0) {
   try {
-    // Wait for Pyodide to be ready
-    if (!pyodideReady) {
+    // Wait for Pyodide to be ready (queue briefly instead of failing fast)
+    const ready = await waitForPyodideReady(15000);
+    if (!ready) {
       return new Response(
         JSON.stringify({
           error: "Pyodide not ready",
-          detail: "The Python environment is still loading. Please try again.",
+          detail:
+            "The Python environment is still loading. Please try again in a moment.",
         }),
         {
           status: 503,
@@ -152,7 +155,12 @@ async function handleASGIRequest(request) {
     }
 
     // Convert fetch Request to ASGI scope
-    const scope = await requestToASGIScope(request);
+    const scope = await requestToASGIScope(request, apiIndex);
+
+    // Use streaming pipeline for SSE
+    if (isSSERequest(request)) {
+      return await handleStreamingASGI(scope);
+    }
 
     // Send request to Pyodide via MessageChannel
     const asgiResponse = await callPyodideASGI(scope);
@@ -178,11 +186,23 @@ async function handleASGIRequest(request) {
 /**
  * Convert a fetch Request to an ASGI scope dictionary
  */
-async function requestToASGIScope(request) {
+async function requestToASGIScope(request, apiIndex = 0) {
   const url = new URL(request.url);
 
-  // Remove API prefix from path
-  const path = url.pathname.replace(API_PREFIX, "") || "/";
+  // Remove API prefix from path (supports base paths)
+  const pathAfterPrefix =
+    apiIndex >= 0 ? url.pathname.slice(apiIndex + API_PREFIX.length) : "";
+  const path = pathAfterPrefix || "/";
+  let normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  // Auto-prefix API v1 routes when missing (leave docs/openapi as-is)
+  const passthroughPrefixes = ["/openapi", "/docs", "/redoc", "/static"];
+  const needsApiPrefix =
+    !normalizedPath.startsWith("/api/") &&
+    !passthroughPrefixes.some((p) => normalizedPath.startsWith(p));
+  if (needsApiPrefix) {
+    normalizedPath = `/api/v1${normalizedPath}`;
+  }
 
   // Extract headers as array of [name, value] tuples
   const headers = [];
@@ -216,13 +236,28 @@ async function requestToASGIScope(request) {
     type: "http",
     method: request.method,
     scheme: url.protocol.replace(":", ""),
-    path: path,
+    path: normalizedPath,
     query_string: url.search.slice(1), // Remove leading '?'
     headers: headers,
     body: body,
   };
 
   return scope;
+}
+
+function isSSERequest(request) {
+  const accept = request.headers.get("accept") || "";
+  return accept.includes("text/event-stream");
+}
+
+async function waitForPyodideReady(timeoutMs = 10000) {
+  if (pyodideReady) return true;
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (pyodideReady) return true;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return pyodideReady;
 }
 
 /**
@@ -267,6 +302,115 @@ async function callPyodideASGI(scope) {
   });
 }
 
+async function handleStreamingASGI(scope) {
+  const { status, headers, stream } = await callPyodideASGIStream(scope);
+
+  const responseHeaders = new Headers();
+  for (const [name, value] of headers) {
+    const nameStr =
+      typeof name === "string" ? name : new TextDecoder().decode(name);
+    const valueStr =
+      typeof value === "string" ? value : new TextDecoder().decode(value);
+    responseHeaders.append(nameStr, valueStr);
+  }
+
+  if (!responseHeaders.has("Content-Type")) {
+    responseHeaders.set("Content-Type", "text/event-stream");
+  }
+  if (!responseHeaders.has("Cache-Control")) {
+    responseHeaders.set("Cache-Control", "no-cache");
+  }
+  if (!responseHeaders.has("Connection")) {
+    responseHeaders.set("Connection", "keep-alive");
+  }
+  if (!responseHeaders.has("Access-Control-Allow-Origin")) {
+    responseHeaders.set("Access-Control-Allow-Origin", "*");
+  }
+
+  return new Response(stream, {
+    status: status,
+    statusText: getStatusText(status),
+    headers: responseHeaders,
+  });
+}
+
+function callPyodideASGIStream(scope) {
+  return new Promise((resolve, reject) => {
+    if (!pyodidePort) {
+      reject(new Error("Pyodide port not available"));
+      return;
+    }
+
+    const requestId = Math.random().toString(36).substring(7);
+    let handleResponse;
+    let resolved = false;
+
+    const stream = new ReadableStream({
+      start(controller) {
+        handleResponse = (event) => {
+          const data = event.data;
+          if (!data || data.requestId !== requestId) return;
+
+          if (data.error) {
+            controller.error(data.error);
+            pyodidePort.removeEventListener("message", handleResponse);
+            if (!resolved) {
+              reject(new Error(data.error));
+            }
+            return;
+          }
+
+          if (data.type === "ASGI_STREAM_START") {
+            resolved = true;
+            resolve({
+              status: data.response?.status ?? 200,
+              headers: data.response?.headers ?? [],
+              stream,
+            });
+            return;
+          }
+
+          if (data.type === "ASGI_STREAM_CHUNK") {
+            let chunk = data.chunk;
+            if (chunk instanceof ArrayBuffer) {
+              chunk = new Uint8Array(chunk);
+            } else if (!(chunk instanceof Uint8Array)) {
+              chunk = new Uint8Array(chunk);
+            }
+            controller.enqueue(chunk);
+            return;
+          }
+
+          if (data.type === "ASGI_STREAM_END") {
+            pyodidePort.removeEventListener("message", handleResponse);
+            controller.close();
+            if (!resolved) {
+              resolve({
+                status: data.response?.status ?? 200,
+                headers: data.response?.headers ?? [],
+                stream,
+              });
+            }
+          }
+        };
+
+        pyodidePort.addEventListener("message", handleResponse);
+
+        pyodidePort.postMessage({
+          type: "ASGI_STREAM_REQUEST",
+          requestId: requestId,
+          scope: scope,
+        });
+      },
+      cancel() {
+        if (handleResponse) {
+          pyodidePort.removeEventListener("message", handleResponse);
+        }
+      },
+    });
+  });
+}
+
 /**
  * Convert ASGI response to fetch Response
  */
@@ -289,7 +433,9 @@ function asgiResponseToFetchResponse(asgiResponse) {
 
   // Convert body to appropriate format
   let responseBody;
-  if (typeof body === "string") {
+  if (body instanceof ReadableStream) {
+    responseBody = body;
+  } else if (typeof body === "string") {
     responseBody = body;
   } else if (body instanceof Uint8Array || body instanceof ArrayBuffer) {
     responseBody = body;

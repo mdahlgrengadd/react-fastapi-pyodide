@@ -3,7 +3,7 @@ export const PYODIDE_CONFIG = {
   CDN_BASE_URL: "https://cdn.jsdelivr.net/pyodide",
   PERSIST_ROOT: "/persist",
   STORAGE_VERSION_KEY: "pyodide_storage_version",
-  CURRENT_STORAGE_VERSION: "1.0.4", // Bumped for is_pyodide() detection fix
+  CURRENT_STORAGE_VERSION: "3.0.0", // Removed old simulated streaming endpoints
   API_PATHS: [
     "/persist/api",
     "/persist/api/app",

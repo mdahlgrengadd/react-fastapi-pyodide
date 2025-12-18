@@ -32,24 +32,58 @@ const pythonFilesPlugin = () => {
       });
 
       // Handle API route redirection to inform client about Pyodide routing
-      server.middlewares.use(
-        "/api/backend",
-        (req: any, res: any, next: any) => {
-          // Return a helpful error message for API calls
+      const basePath =
+        process.env.GITHUB_PAGES === "true"
+          ? `/${
+              process.env.GITHUB_REPOSITORY?.split("/")[1] ||
+              "react-router-fastapi"
+            }/`
+          : "/";
+
+      server.middlewares.use((req: any, res: any, next: any) => {
+        const originalUrl: string = req.originalUrl || req.url || "";
+        if (!originalUrl.startsWith("/api/backend")) {
+          return next();
+        }
+
+        const normalizedBase =
+          basePath === "/" ? "/" : `${basePath}`.replace(/\/+$/, "/");
+        const isOutsideBase =
+          normalizedBase !== "/" && !originalUrl.startsWith(normalizedBase);
+
+        // If we're running with a base path (e.g., GitHub Pages) and the request
+        // did not include it, redirect so the Service Worker scope can intercept.
+        if (isOutsideBase) {
+          const target = `${normalizedBase.replace(/\/$/, "")}${originalUrl}`;
+          res.statusCode = 307;
+          res.setHeader("Location", target);
           res.setHeader("Content-Type", "application/json");
-          res.statusCode = 404;
           res.end(
             JSON.stringify({
-              error: "API route not handled by server",
+              error: "API route redirected under base path",
               message:
-                "This API endpoint should be handled by the Pyodide engine in the browser. Make sure the Pyodide app is loaded and the API calls are being intercepted by the frontend.",
-              path: req.url,
-              suggestion:
-                "This endpoint will work once the Pyodide FastAPI app is running in the browser.",
+                "The Pyodide service worker only controls requests within the app base path. Redirecting so the in-browser FastAPI instance can handle it.",
+              redirect: target,
             })
           );
+          return;
         }
-      );
+
+        // Return a helpful error message for API calls that bypass the SW
+        res.setHeader("Content-Type", "application/json");
+        res.statusCode = 503;
+        res.end(
+          JSON.stringify({
+            error: "API route handled by Pyodide in the browser",
+            message:
+              "This endpoint is served by the Pyodide FastAPI app via the service worker. Load the app first so the worker can intercept /api/backend requests.",
+            path: originalUrl,
+            basePath: normalizedBase,
+            suggestion:
+              "Open the main app (/) and wait for the Pyodide engine to finish loading before calling this endpoint.",
+          })
+        );
+      });
     },
   };
 };

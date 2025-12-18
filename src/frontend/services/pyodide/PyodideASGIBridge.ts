@@ -42,13 +42,13 @@ export class PyodideASGIBridge {
     // The asgi_server.py module should be in the API files
     await this.pyodide!.runPythonAsync(`
 # Import the ASGI server
-from app.core.asgi_server import PyodideASGIServer
+from app.core.asgi_server import create_asgi_server
 
 # Import the FastAPI app
 from app.app_main import app
 
 # Create ASGI server instance
-asgi_server = PyodideASGIServer(app)
+asgi_server = create_asgi_server(app, streaming=True)
 
 print("✅ ASGI server initialized")
     `);
@@ -103,6 +103,10 @@ print("✅ ASGI server initialized")
 
     // Listen for requests from Service Worker
     this.messageChannel.port1.onmessage = async (event) => {
+      if (event.data?.type === "ASGI_STREAM_REQUEST") {
+        await this.handleASGIStreamRequest(event.data);
+        return;
+      }
       await this.handleASGIRequest(event.data);
     };
 
@@ -172,6 +176,68 @@ print("✅ ASGI server initialized")
   }
 
   /**
+   * Handle streaming ASGI requests (e.g., SSE)
+   */
+  private async handleASGIStreamRequest(data: any): Promise<void> {
+    const { requestId, scope } = data;
+
+    try {
+      const onChunk = async (chunk: any) => {
+        let jsChunk = chunk;
+        if (chunk && typeof chunk.toJs === 'function') {
+          jsChunk = chunk.toJs({ create_proxies: false });
+        }
+        const buffer =
+          typeof jsChunk === 'string'
+            ? new TextEncoder().encode(jsChunk)
+            : new Uint8Array(jsChunk);
+
+        this.messageChannel!.port1.postMessage(
+          {
+            type: 'ASGI_STREAM_CHUNK',
+            requestId,
+            chunk: buffer,
+          },
+          buffer?.buffer ? [buffer.buffer] : undefined
+        );
+      };
+
+      const onStart = async (info: any) => {
+        let jsInfo = info;
+        if (info && typeof info.toJs === 'function') {
+          jsInfo = info.toJs({ dict_converter: Object.fromEntries });
+        }
+        this.messageChannel!.port1.postMessage({
+          type: 'ASGI_STREAM_START',
+          requestId,
+          response: jsInfo,
+        });
+      };
+
+      const response = await this.asgiServer.handle_streaming_request(
+        scope,
+        onChunk,
+        onStart
+      );
+
+      const jsResponse = response.toJs({
+        dict_converter: Object.fromEntries,
+      });
+
+      this.messageChannel!.port1.postMessage({
+        type: 'ASGI_STREAM_END',
+        requestId,
+        response: jsResponse,
+      });
+    } catch (error) {
+      this.messageChannel!.port1.postMessage({
+        requestId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
    * Check if the bridge is ready
    */
   isReady(): boolean {
@@ -213,3 +279,5 @@ export async function createASGIBridge(
   await bridge.initialize(pyodide);
   return bridge;
 }
+
+

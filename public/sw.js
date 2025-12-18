@@ -1,5 +1,5 @@
 // Service Worker for PyodideFastAPI Demo
-const CACHE_NAME = "pyodide-fastapi-v6";
+const CACHE_NAME = "pyodide-fastapi-v7-streaming";
 
 // Get the base path from the service worker URL
 const basePath = self.location.pathname.replace("/sw.js", "") || "";

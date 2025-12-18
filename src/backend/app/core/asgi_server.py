@@ -188,6 +188,7 @@ class PyodideASGIServer:
             "body": b""
         }
 
+        body_chunks = 0
         for message in send_queue:
             msg_type = message.get("type")
 
@@ -200,7 +201,10 @@ class PyodideASGIServer:
                 if isinstance(body, str):
                     body = body.encode("utf-8")
                 response["body"] += body
+                body_chunks += 1
 
+        print(
+            f"📦 Collected {body_chunks} body chunks, total size: {len(response['body'])} bytes")
         return response
 
 
@@ -215,7 +219,8 @@ class StreamingASGIServer(PyodideASGIServer):
     async def handle_streaming_request(
         self,
         scope_dict: Dict[str, Any],
-        on_chunk: Callable[[bytes], Awaitable[None]]
+        on_chunk: Callable[[bytes], Awaitable[None]],
+        on_start: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None
     ) -> Dict[str, Any]:
         """
         Handle a request with streaming response support.
@@ -245,6 +250,8 @@ class StreamingASGIServer(PyodideASGIServer):
             if msg_type == "http.response.start":
                 response_info["status"] = message.get("status", 200)
                 response_info["headers"] = message.get("headers", [])
+                if on_start:
+                    await on_start(response_info)
 
             elif msg_type == "http.response.body":
                 body = message.get("body", b"")
