@@ -82,7 +82,7 @@ if "/persist/api" not in sys.path:
 if not os.getcwd().endswith("/persist/api"):
     os.chdir("/persist/api")
 
-print("📱 Loading FastAPI app (unmodified)...")
+print("📱 Loading FastAPI client app (with reactive sync)...")
 
 # Clear cached session module to force reload with StaticPool fix
 if 'app.db.session' in sys.modules:
@@ -91,8 +91,9 @@ if 'app.db.session' in sys.modules:
 if 'app.db' in sys.modules:
     del sys.modules['app.db']
 
-from app.app_main import app
-print("✅ FastAPI app loaded successfully!")
+# Load CLIENT app with reactive sync support
+from app.client_main import app
+print("✅ FastAPI client app loaded successfully!")
 
 # Initialize the database
 try:
@@ -158,7 +159,17 @@ print(f"📋 Registered {len(get_endpoints_from_app())} endpoints")
 import importlib
 import sys
 
+# IMPORTANT: Preserve reactive sync runtime before deleting modules
+from app.reactive_sqlmodel.runtime import get_runtime
+try:
+    preserved_runtime = get_runtime()
+    print("💾 Preserved reactive sync runtime")
+except RuntimeError:
+    preserved_runtime = None
+    print("⚠️ No runtime to preserve")
+
 # Step 1: Delete all domain router modules to force complete reimport
+# BUT preserve models to avoid clearing reactive sync runtime
 router_modules = [
     'app.domains.system.router',
     'app.domains.users.router',
@@ -171,6 +182,9 @@ for module_name in router_modules:
         del sys.modules[module_name]
         print(f"🗑️ Deleted {module_name}")
 
+# DO NOT delete domain.models or reactive_sqlmodel modules
+# as they contain the reactive sync runtime
+
 # Step 2: Delete API modules to force fresh imports
 api_modules = ['app.api.v1', 'app.api']
 for module_name in api_modules:
@@ -178,13 +192,19 @@ for module_name in api_modules:
         del sys.modules[module_name]
         print(f"🗑️ Deleted {module_name}")
 
-# Step 3: Delete and reload the app module to create fresh FastAPI instance
-if 'app.app_main' in sys.modules:
-    del sys.modules['app.app_main']
-    print("🗑️ Deleted app.app_main")
+# Step 3: DO NOT delete app.client_main - just reimport the routers
+# This preserves the reactive sync runtime
+print("♻️ Keeping app.client_main to preserve reactive sync runtime")
 
-# Step 4: Import everything fresh
-from app.app_main import app
+# Step 4: Force reimport of routers through importlib
+import importlib
+for module_name in ['app.api', 'app.api.v1']:
+    if module_name in sys.modules:
+        importlib.reload(sys.modules[module_name])
+
+# Get the existing app instance (already has reactive sync)
+from app.client_main import app
+print("✅ Reusing app with reactive sync intact")
 
 # Force OpenAPI schema generation to ensure all routes are registered
 openapi_schema = app.openapi()

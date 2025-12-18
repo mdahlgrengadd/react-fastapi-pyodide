@@ -1,10 +1,9 @@
 """Database initialization and sample data setup."""
 from typing import Dict, Any
 
-from sqlalchemy.orm import Session
+from sqlmodel import Session, SQLModel, select
 from sqlalchemy import text
 
-from app.db.base import Base
 from app.db.session import engine, get_db_sync, DATABASE_URL, ENVIRONMENT, HAS_ASYNC_SQLALCHEMY
 from app.core.logging import get_logger
 from app.core.runtime import IS_PYODIDE
@@ -15,19 +14,19 @@ logger = get_logger(__name__)
 async def create_tables():
     """Create all database tables."""
     try:
-        # Import all models to ensure they're registered
+        # Import all models to ensure they're registered with SQLModel
         from app.domains.models import User, Post, configure_relationships
 
-        # Explicitly configure mappers to resolve relationships
+        # Configure relationships (SQLModel handles this automatically)
         configure_relationships()
 
         if HAS_ASYNC_SQLALCHEMY and not IS_PYODIDE:
             # Async engine - use async context manager
             async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
+                await conn.run_sync(SQLModel.metadata.create_all)
         else:
             # Sync engine - use sync method
-            Base.metadata.create_all(bind=engine)
+            SQLModel.metadata.create_all(bind=engine)
 
         logger.info("Database tables created successfully")
     except Exception as e:
@@ -38,13 +37,13 @@ async def create_tables():
 def create_tables_sync():
     """Synchronous version of create_tables for compatibility."""
     try:
-        # Import all models to ensure they're registered
+        # Import all models to ensure they're registered with SQLModel
         from app.domains.models import User, Post, configure_relationships
 
-        # Explicitly configure mappers to resolve relationships
+        # Configure relationships (SQLModel handles this automatically)
         configure_relationships()
 
-        Base.metadata.create_all(bind=engine)
+        SQLModel.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully (sync)")
     except Exception as e:
         logger.error(f"Error creating database tables: {e}")
@@ -58,8 +57,9 @@ def init_sample_data(db: Session) -> Dict[str, Any]:
         from app.domains.models import User, Post
 
         # Check if data already exists (from persistence)
-        existing_users = db.query(User).count()
-        existing_posts = db.query(Post).count()
+        # Use SQLModel's exec() with select() instead of query()
+        existing_users = len(db.exec(select(User)).all())
+        existing_posts = len(db.exec(select(Post)).all())
 
         if existing_users > 0:
             logger.info(

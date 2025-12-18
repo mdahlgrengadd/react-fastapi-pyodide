@@ -1,8 +1,8 @@
 """
-Import all domain models to ensure they're registered with SQLAlchemy.
+Import all domain models to ensure they're registered with SQLModel.
 
 This module ensures that all models are properly imported and available
-when SQLAlchemy tries to resolve relationships.
+when the application starts.
 """
 
 import sys
@@ -25,31 +25,19 @@ except Exception as e:
     logger.error(f"❌ Failed to import Post model: {e}")
     raise
 
-# Force SQLAlchemy to configure relationships after all models are loaded
-
 
 def configure_relationships():
-    """Explicitly configure SQLAlchemy mappers after all models are loaded."""
-    try:
-        from sqlalchemy.orm import configure_mappers
+    """Configure model relationships.
 
-        # Ensure all models are available in the registry
-        from sqlalchemy import inspect
-        from app.db.base import Base
+    SQLModel handles relationship configuration automatically through its
+    integration with SQLAlchemy. This function is kept for backwards
+    compatibility with existing code that calls it.
 
-        # Check if models are properly registered
-        mapper_registry = Base.registry._class_registry
-        logger.info(
-            f"Available models in registry: {list(mapper_registry.keys())}")
-
-        # Configure mappers
-        configure_mappers()
-        logger.info("✅ SQLAlchemy relationships configured successfully")
-        return True
-    except Exception as e:
-        logger.error(f"⚠️ Error configuring SQLAlchemy relationships: {e}")
-        # Don't re-raise to allow the app to continue running
-        return False
+    Note: Relationships are currently commented out in the models since
+    we're focusing on reactive sync first. They can be re-enabled later.
+    """
+    logger.info("✅ SQLModel relationships configured (automatic)")
+    return True
 
 
 # Re-export for convenience

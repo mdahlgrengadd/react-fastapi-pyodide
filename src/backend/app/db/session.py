@@ -111,8 +111,8 @@ def get_db_sync():
     if not is_pyodide() and HAS_ASYNC_SQLALCHEMY:
         # In CPython with async support, we need a sync session for certain operations
         from sqlalchemy import create_engine
-        from sqlalchemy.orm import sessionmaker
         from sqlalchemy.pool import NullPool
+        from sqlmodel import Session
         
         sync_engine_kwargs = {
             "connect_args": {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
@@ -127,9 +127,8 @@ def get_db_sync():
             DATABASE_URL.replace("sqlite+aiosqlite:///", "sqlite:///"),
             **sync_engine_kwargs
         )
-        SyncSessionLocal = sessionmaker(
-            autocommit=False, autoflush=False, bind=sync_engine)
-        return SyncSessionLocal()
+        # Use SQLModel Session to get .exec() method
+        return Session(sync_engine)
     else:
         # Use existing sync session maker
         return SessionLocal()

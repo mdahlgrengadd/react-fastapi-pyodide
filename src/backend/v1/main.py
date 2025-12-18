@@ -23,10 +23,17 @@ else:
 sys.path.insert(0, app_dir)
 
 try:    # Import from the new app structure
-    from app.app_main import app
+    # Import CLIENT app in Pyodide (with reactive sync), SERVER app in CPython
     from app.core.runtime import IS_PYODIDE
+    
+    if IS_PYODIDE:
+        from app.client_main import app
+        print("✅ Loaded CLIENT app (with reactive sync) for Pyodide")
+    else:
+        from app.app_main import app
+        print("✅ Loaded SERVER app for CPython")
+    
     from app.core.logging import get_logger
-
     logger = get_logger(__name__)
     logger.info("✅ Successfully loaded modular FastAPI app")
 

@@ -44,8 +44,8 @@ export class PyodideASGIBridge {
 # Import the ASGI server
 from app.core.asgi_server import create_asgi_server
 
-# Import the FastAPI app
-from app.app_main import app
+# Import the CLIENT app (with reactive sync), not the server app
+from app.client_main import app
 
 # Create ASGI server instance
 asgi_server = create_asgi_server(app, streaming=True)
