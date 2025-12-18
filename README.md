@@ -90,16 +90,19 @@ root/
 
 ## API Reference
 Once the app initializes, you can:
-- View the Swagger UI at `/api/docs` (handled in the browser).
-- Call endpoints under `/api/backend/v1/` (e.g., `/api/backend/v1/users`).
+- View the Swagger UI at `/docs` (handled fully in the browser).
+- Call todo endpoints directly (no external server needed).
 
 Example endpoints:
 ```http
-GET  /api/backend/v1/users
-POST /api/backend/v1/users
-GET  /api/backend/v1/users/{user_id}
-PUT  /api/backend/v1/users/{user_id}
-DELETE /api/backend/v1/users/{user_id}
+GET     /                      # welcome payload
+GET     /todos                 # list todos (optional search/completed filters)
+POST    /todos                 # create a todo
+GET     /todos/{todo_id}       # fetch a todo
+PUT     /todos/{todo_id}       # update a todo
+PATCH   /todos/{todo_id}/toggle # flip completion
+DELETE  /todos/{todo_id}       # delete a todo
+GET     /todos/summary         # totals and completion stats
 ```
 
 ## Frontend Overview

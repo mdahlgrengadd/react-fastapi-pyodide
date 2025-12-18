@@ -118,14 +118,24 @@ export const PyodideEndpointComponent: React.FC<
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [endpoint.operationId, endpoint.method]);
   const handleFormSubmit = async (formData: FormData) => {
-    if (endpoint.operationId === "search_users") {
-      // For search, use query parameters, mapping to correct API parameter
+    if (endpoint.operationId === "list_todos") {
       const queryParams: Record<string, string | number | boolean | undefined> =
         {};
 
       if (formData.search) {
         queryParams.search = formData.search;
       }
+
+      if (formData.completed !== undefined && formData.completed !== "") {
+        if (typeof formData.completed === "string") {
+          const value = formData.completed.toLowerCase();
+          if (value === "true") queryParams.completed = true;
+          if (value === "false") queryParams.completed = false;
+        } else {
+          queryParams.completed = formData.completed;
+        }
+      }
+
       if (formData.skip !== undefined && formData.skip !== "") {
         queryParams.skip = formData.skip;
       }
@@ -135,7 +145,6 @@ export const PyodideEndpointComponent: React.FC<
 
       await executeEndpoint(undefined, queryParams);
     } else {
-      // For POST/PUT, use request body
       await executeEndpoint(formData);
     }
   };
@@ -211,16 +220,9 @@ export const PyodideEndpointComponent: React.FC<
       {/* Interactive Forms for POST/PUT/Search */}
       {(endpoint.method === "POST" ||
         endpoint.method === "PUT" ||
-        endpoint.operationId === "search_users") &&
-        ![
-          "clear_persistence",
-          "clear_backup_only",
-          "reset_to_defaults",
-          "save_to_persistence",
-          "restore_from_persistence",
-        ].includes(endpoint.operationId) && (
-          <InteractiveForm endpoint={endpoint} onSubmit={handleFormSubmit} />
-        )}
+        endpoint.operationId === "list_todos") && (
+        <InteractiveForm endpoint={endpoint} onSubmit={handleFormSubmit} />
+      )}
       {/* Action Buttons for Persistence Operations */}
       {[
         "clear_persistence",
@@ -239,7 +241,7 @@ export const PyodideEndpointComponent: React.FC<
         <DeleteConfirmation
           endpoint={endpoint}
           onConfirm={handleDelete}
-          userId={params.user_id as string}
+          itemId={params.todo_id as string}
         />
       )}
       {/* Loading State */}

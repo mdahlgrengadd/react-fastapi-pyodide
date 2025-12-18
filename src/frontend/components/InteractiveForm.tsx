@@ -33,112 +33,61 @@ export const InteractiveForm: React.FC<InteractiveFormProps> = ({
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
-  // Determine form fields based on endpoint
+
   const getFormFields = (): FormField[] => {
-    if (endpoint.operationId === "create_user") {
-      return [
-        { name: "name", type: "text", label: "Name", required: true },
-        { name: "email", type: "email", label: "Email", required: true },
-        { name: "age", type: "number", label: "Age", min: 0, max: 150 },
-        { name: "bio", type: "text", label: "Bio" },
-      ];
-    } else if (endpoint.operationId === "update_user") {
-      return [
-        { name: "name", type: "text", label: "Name" },
-        { name: "email", type: "email", label: "Email" },
-        { name: "age", type: "number", label: "Age", min: 0, max: 150 },
-        { name: "bio", type: "text", label: "Bio" },
-        { name: "is_active", type: "checkbox", label: "Active" },
-      ];
-    } else if (endpoint.operationId === "create_post") {
-      return [
-        { name: "title", type: "text", label: "Title", required: true },
-        { name: "content", type: "textarea", label: "Content", required: true },
-        { name: "published", type: "checkbox", label: "Published" },
-        {
-          name: "author_id",
-          type: "number",
-          label: "Author ID",
-          required: true,
-        },
-      ];
-    } else if (endpoint.operationId === "search_users") {
-      return [
-        { name: "search", type: "text", label: "Search (name or email)" },
-        { name: "skip", type: "number", label: "Skip", min: 0 },
-        { name: "limit", type: "number", label: "Limit", min: 1, max: 100 },
-      ];
-    } else if (endpoint.operationId === "clear_persistence") {
-      return [
-        { name: "confirm", type: "action", label: "Clear & Reset Database" },
-      ];
-    } else if (endpoint.operationId === "clear_backup_only") {
-      return [
-        { name: "confirm", type: "action", label: "Clear Backup Storage" },
-      ];
-    } else if (endpoint.operationId === "reset_to_defaults") {
-      return [
-        { name: "confirm", type: "action", label: "Reset to Default Data" },
-      ];
-    } else if (endpoint.operationId === "save_to_persistence") {
-      return [{ name: "confirm", type: "action", label: "Save to Backup" }];
-    } else if (endpoint.operationId === "restore_from_persistence") {
-      return [
-        { name: "confirm", type: "action", label: "Restore from Backup" },
-      ];
+    switch (endpoint.operationId) {
+      case "create_todo":
+        return [
+          { name: "title", type: "text", label: "Title", required: true },
+          { name: "description", type: "textarea", label: "Description" },
+          { name: "priority", type: "text", label: "Priority (low/normal/high)" },
+          { name: "completed", type: "checkbox", label: "Completed" },
+        ];
+      case "update_todo":
+        return [
+          { name: "title", type: "text", label: "Title" },
+          { name: "description", type: "textarea", label: "Description" },
+          { name: "priority", type: "text", label: "Priority" },
+          { name: "completed", type: "checkbox", label: "Completed" },
+        ];
+      case "list_todos":
+        return [
+          { name: "search", type: "text", label: "Search title/description" },
+          { name: "completed", type: "text", label: "Completed (true/false)" },
+          { name: "skip", type: "number", label: "Skip", min: 0 },
+          { name: "limit", type: "number", label: "Limit", min: 1, max: 100 },
+        ];
+      default:
+        return [];
     }
-    return [];
   };
 
   const fields = getFormFields();
-
   if (fields.length === 0) return null;
+
   const getFormTitle = (): string => {
     switch (endpoint.operationId) {
-      case "create_user":
-        return "✨ Create New User";
-      case "update_user":
-        return "✏️ Update User";
-      case "create_post":
-        return "📝 Create New Post";
-      case "search_users":
-        return "🔍 Search Users";
-      case "clear_persistence":
-        return "🗑️ Clear & Reset Database";
-      case "clear_backup_only":
-        return "🗄️ Clear Backup Storage";
-      case "reset_to_defaults":
-        return "🔄 Reset to Default Data";
-      case "save_to_persistence":
-        return "💾 Save to Backup";
-      case "restore_from_persistence":
-        return "📥 Restore from Backup";
+      case "create_todo":
+        return "Create Todo";
+      case "update_todo":
+        return "Update Todo";
+      case "list_todos":
+        return "Filter Todos";
       default:
         return endpoint.summary || "Execute Action";
     }
   };
+
   const getSubmitButtonText = (): string => {
-    if (isSubmitting) return "⏳ Processing...";
+    if (isSubmitting) return "Processing...";
 
     switch (endpoint.operationId) {
-      case "create_user":
-        return "✨ Create User";
-      case "update_user":
-        return "✏️ Update User";
-      case "create_post":
-        return "📝 Create Post";
-      case "search_users":
-        return "🔍 Search";
-      case "clear_persistence":
-        return "🗑️ Clear & Reset";
-      case "clear_backup_only":
-        return "🗄️ Clear Backup";
-      case "reset_to_defaults":
-        return "🔄 Reset to Defaults";
-      case "save_to_persistence":
-        return "💾 Save Backup";
-      case "restore_from_persistence":
-        return "📥 Restore";
+      case "create_todo":
+        return "Create Todo";
+      case "update_todo":
+        return "Update Todo";
+      case "list_todos":
+        return "Search";
       default:
         return "Execute";
     }
@@ -168,7 +117,7 @@ export const InteractiveForm: React.FC<InteractiveFormProps> = ({
             >
               {field.label}
               {field.required && <span style={{ color: "#dc3545" }}>*</span>}
-            </label>{" "}
+            </label>
             {field.type === "checkbox" ? (
               <input
                 type="checkbox"
@@ -186,14 +135,13 @@ export const InteractiveForm: React.FC<InteractiveFormProps> = ({
                 style={{
                   width: "100%",
                   padding: "8px 12px",
-                  border: "1px solid #ced4da",
+                  border: "1px solid " + "#ced4da",
                   borderRadius: "4px",
                   fontSize: "14px",
                   resize: "vertical",
                 }}
               />
             ) : (
-              // For regular input fields
               <input
                 type={field.type}
                 value={formData[field.name] ? String(formData[field.name]) : ""}
@@ -214,7 +162,7 @@ export const InteractiveForm: React.FC<InteractiveFormProps> = ({
                 style={{
                   width: "100%",
                   padding: "8px 12px",
-                  border: "1px solid #ced4da",
+                  border: "1px solid " + "#ced4da",
                   borderRadius: "4px",
                   fontSize: "14px",
                 }}

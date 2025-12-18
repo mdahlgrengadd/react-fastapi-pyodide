@@ -160,10 +160,7 @@ import sys
 
 # Step 1: Delete all domain router modules to force complete reimport
 router_modules = [
-    'app.domains.system.router',
-    'app.domains.users.router',
-    'app.domains.posts.router',
-    'app.domains.dashboard.router',
+    'app.domains.todos.router',
 ]
 
 for module_name in router_modules:

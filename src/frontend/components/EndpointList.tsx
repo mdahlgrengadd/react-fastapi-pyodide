@@ -10,8 +10,8 @@ interface EndpointListProps {
 
 export const EndpointList: React.FC<EndpointListProps> = ({ endpoints }) => {
   const groupedEndpoints = endpoints.reduce((acc, endpoint) => {
-    const category = endpoint.path.startsWith("/users")
-      ? "User Management"
+    const category = endpoint.path.startsWith("/todos")
+      ? "Todos"
       : "General";
     if (!acc[category]) acc[category] = [];
     acc[category].push(endpoint);
@@ -36,10 +36,10 @@ export const EndpointList: React.FC<EndpointListProps> = ({ endpoints }) => {
         }}
       >
         <h1 style={{ margin: "0 0 10px 0", fontSize: "2.5em" }}>
-          🐍 Pyodide FastAPI Demo
+          Todo API in Pyodide
         </h1>
         <p style={{ margin: "0 0 15px 0", fontSize: "1.2em", opacity: 0.9 }}>
-          Real Python FastAPI running in your browser via Pyodide!
+          Manage todos with a FastAPI backend running entirely in your browser.
         </p>
         <div
           style={{
@@ -50,22 +50,21 @@ export const EndpointList: React.FC<EndpointListProps> = ({ endpoints }) => {
             fontSize: "14px",
           }}
         >
-          ✨ Full CRUD Operations • 🔍 Search & Filter • 📊 Statistics • 🚀 Zero
-          Server Required
+          Create tasks · Update progress · Toggle completion · View summaries
         </div>
       </div>
 
       {Object.entries(groupedEndpoints).map(([category, categoryEndpoints]) => (
         <div key={category} style={{ marginBottom: "30px" }}>
           <h2
-            style={{
+            style={{ 
               color: "#495057",
               borderBottom: "2px solid #dee2e6",
               paddingBottom: "10px",
               marginBottom: "20px",
             }}
           >
-            {category === "User Management" ? "👥" : "⚙️"} {category}
+            {category === "Todos" ? "✓" : "ℹ"} {category}
           </h2>
           <div
             style={{
@@ -77,10 +76,9 @@ export const EndpointList: React.FC<EndpointListProps> = ({ endpoints }) => {
             {categoryEndpoints.map((endpoint) => {
               const routePath = convertOpenAPIPathToReactRouter(endpoint.path);
 
-              // For endpoints with path parameters, provide sample values
               let demoPath = routePath;
-              if (endpoint.path.includes("{user_id}")) {
-                demoPath = routePath.replace(":user_id", "1"); // Use sample user ID
+              if (endpoint.path.includes("{todo_id}")) {
+                demoPath = routePath.replace(":todo_id", "1");
               }
 
               const linkPath =
@@ -175,7 +173,7 @@ export const EndpointList: React.FC<EndpointListProps> = ({ endpoints }) => {
           border: "1px solid #dee2e6",
         }}
       >
-        <h3 style={{ marginTop: 0, color: "#495057" }}>📚 API Documentation</h3>
+        <h3 style={{ marginTop: 0, color: "#495057" }}>API Documentation</h3>
         <p style={{ color: "#6c757d", marginBottom: "15px" }}>
           Explore the API with interactive documentation powered by Swagger UI.
         </p>
@@ -195,7 +193,7 @@ export const EndpointList: React.FC<EndpointListProps> = ({ endpoints }) => {
               display: "inline-block",
             }}
           >
-            📖 Open Swagger UI
+            Open Swagger UI
           </Link>
           <button
             onClick={() => {
@@ -216,7 +214,7 @@ export const EndpointList: React.FC<EndpointListProps> = ({ endpoints }) => {
               fontWeight: "500",
             }}
           >
-            🔍 Show OpenAPI Schema
+            Show OpenAPI Schema
           </button>
         </div>
       </div>

@@ -13,7 +13,7 @@ if __name__ != "__main__":
         sys.path.insert(0, current_dir)
 
 # Import models EARLY to ensure they're available for relationship resolution
-from app.domains.models import Todo, configure_relationships
+from app.domains.models import User, Post, configure_relationships
 
 from app.core.settings import settings
 from app.core.logging import setup_logging, get_logger
@@ -66,7 +66,10 @@ def create_app() -> FastAPI:
         redoc_url=settings.redoc_url,
         lifespan=lifespan,
         openapi_tags=[
-            {"name": "todos", "description": "Simple todo management"},
+            {"name": "users", "description": "User management with SQLAlchemy models"},
+            {"name": "posts", "description": "Blog posts with relationships"},
+            {"name": "dashboard", "description": "Complex responses with mixed models"},
+            {"name": "system", "description": "System information and diagnostics"},
         ]
     )
 
@@ -94,7 +97,7 @@ if __name__ == "__main__":
     if not IS_PYODIDE:
         import uvicorn
         uvicorn.run(
-            "app.app_main:app",
+            "app.main:app",
             host="0.0.0.0",
             port=8000,
             reload=True,

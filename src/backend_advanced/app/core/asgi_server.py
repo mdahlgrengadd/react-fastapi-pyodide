@@ -10,9 +10,9 @@ Usage:
 
     app = FastAPI()
 
-    @app.get("/api/todos")
-    def get_todos():
-        return {"todos": []}
+    @app.get("/api/users")
+    def get_users():
+        return {"users": []}
 
     # Wrap with ASGI server
     server = PyodideASGIServer(app)

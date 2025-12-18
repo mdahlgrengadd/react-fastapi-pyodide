@@ -10,10 +10,10 @@ class Settings(BaseModel):
     """Application settings with environment-specific defaults."""
 
     # Application
-    app_name: str = Field(default="Pyodide Todo Demo")
-    app_version: str = Field(default="1.0.0")
+    app_name: str = Field(default="Enhanced Bridge SQLAlchemy Demo")
+    app_version: str = Field(default="2.0.0")
     app_description: str = Field(
-        default="A minimal todo API that runs fully inside Pyodide"
+        default="Demonstrates automatic SQLAlchemy model serialization with zero code changes"
     )
     # Environment
     environment: str = Field(default_factory=get_environment)
@@ -29,7 +29,7 @@ class Settings(BaseModel):
     )
 
     # API
-    api_v1_prefix: str = Field(default="")
+    api_v1_prefix: str = Field(default="/api/v1")
     openapi_url: str = Field(default="/openapi.json")
     docs_url: str = Field(default="/docs")
     redoc_url: str = Field(default="/redoc")

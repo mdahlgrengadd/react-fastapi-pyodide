@@ -5,13 +5,13 @@ import { PyodideEndpoint } from './index';
 interface DeleteConfirmationProps {
   endpoint: PyodideEndpoint;
   onConfirm: () => Promise<void>;
-  userId?: string;
+  itemId?: string;
 }
 
 const DeleteConfirmation: React.FunctionComponent<DeleteConfirmationProps> = ({
   endpoint,
   onConfirm,
-  userId,
+  itemId,
 }) => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -38,11 +38,11 @@ const DeleteConfirmation: React.FunctionComponent<DeleteConfirmationProps> = ({
         border: "1px solid #ffeaa7",
       }}
     >
-      <h4 style={{ marginTop: 0, color: "#856404" }}>🗑️ Delete User</h4>
+      <h4 style={{ marginTop: 0, color: "#856404" }}>Delete Todo</h4>
       {!showConfirm ? (
         <div>
           <p style={{ color: "#856404", marginBottom: "15px" }}>
-            {userId ? `Delete user with ID: ${userId}` : "Delete this user"}
+            {itemId ? `Delete todo with ID: ${itemId}` : "Delete this todo"}
           </p>
           <button
             onClick={() => setShowConfirm(true)}
@@ -57,7 +57,7 @@ const DeleteConfirmation: React.FunctionComponent<DeleteConfirmationProps> = ({
               fontWeight: "500",
             }}
           >
-            🗑️ Delete User
+            Delete Todo
           </button>
         </div>
       ) : (
@@ -69,7 +69,7 @@ const DeleteConfirmation: React.FunctionComponent<DeleteConfirmationProps> = ({
               fontWeight: "500",
             }}
           >
-            ⚠️ Are you sure you want to delete this user? This action cannot be
+            Are you sure you want to delete this todo? This action cannot be
             undone.
           </p>
           <div style={{ display: "flex", gap: "10px" }}>
@@ -86,7 +86,7 @@ const DeleteConfirmation: React.FunctionComponent<DeleteConfirmationProps> = ({
                 fontSize: "14px",
               }}
             >
-              {isDeleting ? "⏳ Deleting..." : "✅ Yes, Delete"}
+              {isDeleting ? "Deleting..." : "Yes, Delete"}
             </button>
             <button
               onClick={() => setShowConfirm(false)}
@@ -101,7 +101,7 @@ const DeleteConfirmation: React.FunctionComponent<DeleteConfirmationProps> = ({
                 fontSize: "14px",
               }}
             >
-              ❌ Cancel
+              Cancel
             </button>
           </div>
         </div>
